@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facebook.Auth.Sample", "Sam
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NWSWeather.Sample", "Samples\NWSWeather.Sample\NWSWeather.Sample.csproj", "{377E6FE1-1B2D-4DA5-AFF9-A2B1FB159EFC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgFx.Controls.Phone", "AgFx.Controls.Phone\AgFx.Controls.Phone.csproj", "{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -115,6 +117,24 @@ Global
 		{377E6FE1-1B2D-4DA5-AFF9-A2B1FB159EFC}.Release|x86.ActiveCfg = Release|x86
 		{377E6FE1-1B2D-4DA5-AFF9-A2B1FB159EFC}.Release|x86.Build.0 = Release|x86
 		{377E6FE1-1B2D-4DA5-AFF9-A2B1FB159EFC}.Release|x86.Deploy.0 = Release|x86
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|ARM.ActiveCfg = Debug|ARM
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|ARM.Build.0 = Debug|ARM
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|x86.ActiveCfg = Debug|x86
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Debug|x86.Build.0 = Debug|x86
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|ARM.ActiveCfg = Release|ARM
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|ARM.Build.0 = Release|ARM
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|Mixed Platforms.Build.0 = Release|x86
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|x64.ActiveCfg = Release|Any CPU
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|x86.ActiveCfg = Release|x86
+		{CDBBC960-2F8D-4E4F-932B-496204F7FAAF}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

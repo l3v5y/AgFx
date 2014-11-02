@@ -38,7 +38,6 @@
     <Compile Include="Authorisation\LoginLoadContext.cs" />
     <Compile Include="Authorisation\LoginModel.cs" />
     <Compile Include="AutoLoadContextCreator.cs" />
-    <Compile Include="BatchObservableCollection.cs" />
     <Compile Include="CacheEntry.cs" />
     <Compile Include="CacheItemInfo.cs" />
     <Compile Include="CachePolicy.cs" />
@@ -73,7 +72,6 @@
     <Compile Include="ReflectionHelpers.cs" />
     <Compile Include="ReflectionSerializer.cs" />
     <Compile Include="StoreProviderBase.cs" />
-    <Compile Include="Timer.cs" />
     <Compile Include="UpdateCompletionHandler.cs" />
     <Compile Include="WebLoadRequest.cs" />
     <Compile Include="WorkerThread.cs" />

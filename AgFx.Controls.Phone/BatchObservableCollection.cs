@@ -1,13 +1,17 @@
-﻿// (c) Copyright Microsoft Corporation.
+﻿
+// (c) Copyright Microsoft Corporation.
 // This source is subject to the Apache License, Version 2.0
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
+
 
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Windows;
+using System.Windows.Threading;
 
 namespace AgFx
 {
@@ -24,8 +28,7 @@ namespace AgFx
         int _batchSize; // how many items to add at a time
         bool _dequeuing; // if a dequeue operation is in progress.
         Queue<T> _batchItems = new Queue<T>(); // the queue for new items
-
-        Timer _timer;
+        DispatcherTimer _timer;
 
         private bool DelayMode
         {
@@ -35,13 +38,21 @@ namespace AgFx
             }
         }
 
-        /// <summary>
-        /// The amount of time to wait between batched adds. 
-        /// </summary>
+        // The amount of time to wait between batched adds.
+        //
         private TimeSpan TimeBetweenBatches
         {
             get;
             set;
+        }
+
+        // helper to determine if the current thread is the UI thread.
+        private bool IsUiThread
+        {
+            get
+            {
+                return Deployment.Current.Dispatcher.CheckAccess();
+            }
         }
 
         /// <summary>
@@ -72,13 +83,17 @@ namespace AgFx
             _batchSize = batchSize;
             TimeBetweenBatches = timeBetweenBatches;
 
-            if (_batchSize > 0)
+            if (_batchSize > 0 && IsUiThread)
             {
                 PriorityQueue.AddUiWorkItem(() =>
                 {
+                    _timer = new DispatcherTimer();
+                    _timer.Tick += new EventHandler(Timer_Tick);
+                    _timer.Interval = TimeBetweenBatches;
+
                     if (_batchItems.Count > 0)
                     {
-                        _timer = new Timer(ProcessBatch, null, 0, TimeBetweenBatches.Milliseconds);
+                        _timer.Start();
                     }
                 });
             }
@@ -88,7 +103,7 @@ namespace AgFx
         /// This timer serves as the mechanism for batching.  We'll a batch
         /// of items at each tick.
         /// </summary>
-        void ProcessBatch(object state)
+        void Timer_Tick(object sender, EventArgs e)
         {
             _dequeuing = true;
 
@@ -119,7 +134,7 @@ namespace AgFx
         /// <param name="items"></param>
         public void AddRange(IEnumerable<T> items)
         {
-            bool delay = _batchSize > 0;
+            bool delay = IsUiThread && _batchSize > 0;
             if (delay && items.Count() > _batchSize)
             {
                 foreach (var item in items)
@@ -127,9 +142,9 @@ namespace AgFx
                     _batchItems.Enqueue(item);
                 }
 
-                if (_timer == null)
+                if (_timer != null)
                 {
-                    _timer = new Timer(ProcessBatch, null, 0, TimeBetweenBatches.Milliseconds);
+                    _timer.Start();
                 }
             }
             else
@@ -148,8 +163,7 @@ namespace AgFx
         {
             if (_timer != null)
             {
-                _timer.Dispose();
-                _timer = null;
+                _timer.Stop();
             }
             _batchItems.Clear();
             _dequeuing = false;

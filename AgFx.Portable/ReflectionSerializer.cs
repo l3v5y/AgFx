@@ -116,7 +116,7 @@ namespace AgFx
             }            
         }
 
-        internal static void UpdateObject(object source, object dest, bool checkUpdatable, DateTime? updateTime)
+        public static void UpdateObject(object source, object dest, bool checkUpdatable, DateTime? updateTime)
         {
 
             if (dest == null || source == null)

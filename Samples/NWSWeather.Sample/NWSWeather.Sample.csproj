@@ -178,6 +178,12 @@
       <HintPath>..\..\AgFx.Portable\bin\Debug\AgFx.Portable.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\AgFx.Controls.Phone\AgFx.Controls.Phone.csproj">
+      <Project>{cdbbc960-2f8d-4e4f-932b-496204f7faaf}</Project>
+      <Name>AgFx.Controls.Phone</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\$(TargetFrameworkIdentifier)\$(TargetFrameworkVersion)\Microsoft.$(TargetFrameworkIdentifier).$(TargetFrameworkVersion).Overrides.targets" />
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\$(TargetFrameworkIdentifier)\$(TargetFrameworkVersion)\Microsoft.$(TargetFrameworkIdentifier).CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

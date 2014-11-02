@@ -2,14 +2,13 @@
 
 namespace AgFx.Authorisation
 {
-    public class LoginLoadContext : LoadContext {
-
-        
+    public class LoginLoadContext : LoadContext
+    {
         private const string DefaultIdentity = "_Current_User_";
 
         public LoginLoadContext()
-            : base(DefaultIdentity) {
-            
+            : base(DefaultIdentity)
+        {
         }
 
         public string Login { get; set; }
@@ -18,11 +17,9 @@ namespace AgFx.Authorisation
         /// <summary>
         /// Return true if a login attempt shoudl be made.
         /// </summary>
-        public virtual bool CanAttemptLogin {
-            get {
-                return !String.IsNullOrEmpty(Login) && !String.IsNullOrEmpty(Password);
-            }
+        public virtual bool CanAttemptLogin
+        {
+            get { return !String.IsNullOrEmpty(Login) && !String.IsNullOrEmpty(Password); }
         }
-
     }
 }

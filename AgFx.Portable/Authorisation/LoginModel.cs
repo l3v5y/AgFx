@@ -5,12 +5,14 @@ using System.Windows;
 namespace AgFx.Authorisation
 {
     /// <summary>
-    /// Base clas for Login models.
+    /// Base class for Login models.
     /// 
     /// Derive from this and add a static Current property as follows:
     /// 
-    /// public static MyLoginModel Current {
-    ///     get {
+    /// public static MyLoginModel Current 
+    /// {
+    ///     get 
+    ///     {
     ///         return GetCurrentLoginModel &lt;MyLoginModel, MyLoginModelLoadContext&gt;()
     ///    }
     /// }
@@ -18,7 +20,6 @@ namespace AgFx.Authorisation
     [CachePolicy(CachePolicy.ValidCacheOnly, 3600 * 24 * 7)]
     public class LoginModel : ModelItemBase<LoginLoadContext>
     {
-
         public const string LoginMessage = "login";
         public const string LogoutMessage = "logout";
         private bool _hasLoggedIn;
@@ -37,7 +38,6 @@ namespace AgFx.Authorisation
         {
             if (_current == null)
             {
-
                 L defaultContext = new L();
 
                 _current = DataManager.Current.LoadFromCache<T>(defaultContext);
@@ -49,9 +49,7 @@ namespace AgFx.Authorisation
             }
             return (T)_current;
         }
-
-
-
+        
         #region Property ExpirationTimeUtc
         private DateTime? _ExpirationTimeUtc;
         public DateTime? ExpirationTimeUtc
@@ -70,9 +68,6 @@ namespace AgFx.Authorisation
             }
         }
         #endregion
-
-
-
 
         [DependentOnProperty("Token")]
         public virtual bool IsLoggedIn
@@ -155,7 +150,6 @@ namespace AgFx.Authorisation
 
         public static void Login<T>(T current, string username, string password, Action<Exception> error) where T : LoginModel, new()
         {
-
             if (current.IsLoggedIn)
             {
                 return;
@@ -166,25 +160,21 @@ namespace AgFx.Authorisation
 
             current.OnLoggingIn();
 
-            DataManager.Current.Refresh<T>(current.LoadContext,
-                (lm) =>
+            DataManager.Current.Refresh<T>(current.LoadContext, (lm) =>
+            {
+                if (lm.IsLoggedIn)
                 {
-                    if (lm.IsLoggedIn)
-                    {
-                        current.UpdateFrom(lm);
-                        lm.RaiseLogin();
-                    }
+                    current.UpdateFrom(lm);
+                    lm.RaiseLogin();
                 }
-                ,
-                (ex) =>
+            }, (ex) =>
+            {
+                current.OnLoginFail(ex);
+                if (error != null)
                 {
-                    current.OnLoginFail(ex);
-                    if (error != null)
-                    {
-                        error(ex);
-                    }
+                    error(ex);
                 }
-            );
+            });
         }
 
         public static void Logout<T>(T current) where T : LoginModel, new()
@@ -199,7 +189,6 @@ namespace AgFx.Authorisation
                     DataManager.Current.RegisterProxy<T>(current);
                     current._hasLoggedIn = false;
                     current.OnLoggedOut();
-
                 }
             }
         }
@@ -211,7 +200,5 @@ namespace AgFx.Authorisation
             RaisePropertyChanged("IsLoggedIn");
             NotificationManager.Current.RaiseMessage(LoginMessage, this);
         }
-
     }
-
 }
