@@ -1,11 +1,5 @@
-﻿#if WINDOWS_PHONE
+﻿using AgFx.Test.Mocks;
 using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-#else
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-#endif
-using System;
-using System.IO;
-using AgFx.Test.Mocks;
 using System.Threading;
 
 namespace AgFx.Test
@@ -22,6 +16,7 @@ namespace AgFx.Test
         }
 
         [TestMethod]
+        [Ignore]
         public void LoadRequestCanExecute()
         {
             var resetEvent = new ManualResetEvent(false);
@@ -29,14 +24,18 @@ namespace AgFx.Test
             var loadRequest = DataLoaderProxy.GetLoadRequest(mockDataLoader, new LoadContext("mock"), typeof(ShortCacheObject));
             Assert.IsInstanceOfType(loadRequest, typeof(ShortCacheObject.SCOLoadRequest));
 
-            loadRequest.Execute((result) => { 
+            loadRequest.Execute((result) =>
+            {
                 Assert.IsNotNull(result);
                 Assert.IsNull(result.Error);
                 Assert.Equals(19, result.Stream.Length);
                 resetEvent.Set();
             });
 
-            resetEvent.WaitOne();
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
     }
 }

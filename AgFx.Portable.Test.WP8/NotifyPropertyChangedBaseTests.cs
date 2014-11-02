@@ -1,11 +1,7 @@
-﻿#if WINDOWS_PHONE
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-#else
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-#endif
-using System.Threading;
+﻿using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
 using System;
 using System.ComponentModel;
+using System.Threading;
 using System.Windows;
 
 namespace AgFx.Test

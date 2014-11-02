@@ -1,8 +1,4 @@
-﻿#if WINDOWS_PHONE
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-#else
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-#endif
+﻿using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
 using PCLStorage;
 using System;
 using System.Collections.Generic;
@@ -35,8 +31,7 @@ namespace AgFx.Test
 
             var rootFolder = await FileSystem.Current.LocalStorage.GetFolderAsync(root);
             var filesInFolder = await rootFolder.GetFilesAsync();
-
-
+            
             fileNames.AddRange(filesInFolder.Select(file => file.Path));
 
             var foldersInRootFolder = await rootFolder.GetFoldersAsync();
@@ -100,7 +95,6 @@ namespace AgFx.Test
 
             _storeProvider.Delete(cii);
             _storeProvider.Flush(true);
-
         }
 
 

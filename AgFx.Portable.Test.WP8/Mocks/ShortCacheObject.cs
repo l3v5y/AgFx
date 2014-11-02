@@ -152,7 +152,6 @@ namespace AgFx.Test.Mocks
                     }
                     catch
                     {
-
                     }
                 },
                 null);

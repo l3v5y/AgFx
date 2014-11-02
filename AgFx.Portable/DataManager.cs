@@ -6,18 +6,18 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Windows;
-using System.IO;
 using System.Threading;
 
-namespace AgFx {
+namespace AgFx
+{
     /// <summary>
     /// DataManager allows access to cached objects and manageds not only caching but reloads, etc.
     /// </summary>
-    public class DataManager : NotifyPropertyChangedBase {
-
+    public class DataManager : NotifyPropertyChangedBase
+    {
         /// <summary>
         /// Event handler for handling any errors not caught by a method level handler (e.g. Load(id, success, error).
         /// </summary>
@@ -28,8 +28,10 @@ namespace AgFx {
         /// <summary>
         /// Default singleton instance of DataManager
         /// </summary>
-        public static DataManager Current {
-            get {
+        public static DataManager Current
+        {
+            get
+            {
                 return _current;
             }
         }
@@ -37,6 +39,7 @@ namespace AgFx {
         private int _loadingCount = 0;
         private static StoreProviderBase _storeProvider;
         private bool _logUnhandledErrors = true;
+        private readonly AutoLoadContextCreator _loadContextCreator = new AutoLoadContextCreator();
 
         internal static StoreProviderBase StoreProvider
         {
@@ -50,27 +53,36 @@ namespace AgFx {
             }
         }
 
+
+
         /// <summary>
         /// True when the DataManager is in the process of performing a load.
         /// </summary>
-        public bool IsLoading {
-            get {
+        public bool IsLoading
+        {
+            get
+            {
                 return _loadingCount > 0;
             }
-            internal set {
+            internal set
+            {
 
                 bool loading = IsLoading;
-                if (value) {
+                if (value)
+                {
                     Interlocked.Increment(ref _loadingCount);
                 }
-                else {
-                    if(Interlocked.Decrement(ref _loadingCount) < 0) {
+                else
+                {
+                    if (Interlocked.Decrement(ref _loadingCount) < 0)
+                    {
                         //This shouldn't happen, but in case if it does we will increment counter back
-                        Interlocked.Increment(ref _loadingCount);                        
+                        Interlocked.Increment(ref _loadingCount);
                     }
                 }
 
-                if (loading != IsLoading) {
+                if (loading != IsLoading)
+                {
                     PriorityQueue.AddUiWorkItem(
                         () =>
                         {
@@ -86,22 +98,27 @@ namespace AgFx {
         /// Configures automatically sending unhandled errors to the ErrorLog.  The default is true.
         /// 
         /// </summary>
-        public bool ShouldLogUnhandledErrors {
-            get {
+        public bool ShouldLogUnhandledErrors
+        {
+            get
+            {
                 return _logUnhandledErrors;
             }
-            set {
+            set
+            {
                 _logUnhandledErrors = value;
             }
         }
 
-        private DataManager() {            
+        private DataManager()
+        {
         }
 
         /// <summary>
         /// Flush any pending cache operations to the store.
         /// </summary>
-        public void Flush() {
+        public void Flush()
+        {
             DataManager.StoreProvider.Flush(true);
         }
 
@@ -116,41 +133,39 @@ namespace AgFx {
         public void Cleanup(DateTime maximumExpirationTime, Action complete)
         {
             PriorityQueue.AddStorageWorkItem(() =>
+            {
+                // get the list of items.
+                //
+                var itemsToCleanup = from item in StoreProvider.GetItems()
+                                     where item.ExpirationTime <= maximumExpirationTime
+                                     select item;
+
+                // we snap the enumerable to an array to guard against any provider
+                // implementations that might have returned an enumerator that would be affected
+                // by the delete operation.
+                //
+                foreach (var item in itemsToCleanup.ToArray())
                 {
-                    // get the list of items.
-                    //
-                    var itemsToCleanup = from item in StoreProvider.GetItems()
-                                         where item.ExpirationTime <= maximumExpirationTime
-                                         select item;
+                    StoreProvider.Delete(item);
+                }
 
-
-                    // we snap the enumerable to an array to guard against any provider
-                    // implementations that might have returned an enumerator that would be affected
-                    // by the delete operation.
-                    //
-                    foreach (var item in itemsToCleanup.ToArray())
-                    {
-                        StoreProvider.Delete(item);
-                    }
-
-
-                    PriorityQueue.AddUiWorkItem(() =>
-                    {
-                        complete();
-                    }
-                    );
-
-                });
+                // TODO: What do to if this didn't ever actually complete succesfully.
+                if (complete != null)
+                {
+                    complete();
+                }
+            });
         }
-
+        
         /// <summary>
         /// Clear any stored state for the specified item, both from memory
         /// as well as from the store.
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="id"></param>
-        public void Clear<T>(object id) where T : new() {
-            Clear<T>(AutoCreateLoadContext<T>(id));
+        public void Clear<T>(object id) where T : new()
+        {
+            Clear<T>(_loadContextCreator.AutoCreateLoadContext<T>(id));
         }
 
         /// <summary>
@@ -159,9 +174,11 @@ namespace AgFx {
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="id"></param>
-        public void Clear<T>(LoadContext id) where T : new() {            
+        public void Clear<T>(LoadContext id) where T : new()
+        {
             CacheEntry value;
-            lock (_objectCache) {
+            lock (_objectCache)
+            {
                 if (_objectCache.ContainsKey(typeof(T)) && _objectCache[typeof(T)].TryGetValue(id.UniqueKey, out value))
                 {
                     value.Clear();
@@ -174,8 +191,10 @@ namespace AgFx {
         /// <summary>
         /// Delete all items in the cache.
         /// </summary>
-        public void DeleteCache() {
-            lock (_objectCache) {
+        public void DeleteCache()
+        {
+            lock (_objectCache)
+            {
                 _objectCache.Clear();
 
                 StoreProvider.Clear();
@@ -188,8 +207,9 @@ namespace AgFx {
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="id"></param>
-        public void Invalidate<T>(object id) where T: new() {
-            var lc = AutoCreateLoadContext<T>(id);
+        public void Invalidate<T>(object id) where T : new()
+        {
+            var lc = _loadContextCreator.AutoCreateLoadContext<T>(id);
             Invalidate<T>(lc);
         }
 
@@ -198,9 +218,11 @@ namespace AgFx {
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="loadContext"></param>
-        public void Invalidate<T>(LoadContext loadContext) where T: new() {
+        public void Invalidate<T>(LoadContext loadContext) where T : new()
+        {
             var cacheItem = Get<T>(loadContext, null, null, false);
-            if (cacheItem != null) {
+            if (cacheItem != null)
+            {
                 cacheItem.SetForRefresh();
             }
         }
@@ -213,7 +235,7 @@ namespace AgFx {
         /// <returns></returns>
         public T Load<T>(object id) where T : new()
         {
-            var lc = AutoCreateLoadContext<T>(id);
+            var lc = _loadContextCreator.AutoCreateLoadContext<T>(id);
             return Load<T>(lc, null, null);
         }
 
@@ -223,7 +245,8 @@ namespace AgFx {
         /// <typeparam name="T">The type of the item to load.</typeparam>
         /// <param name="loadContext">The load context that describes this item's load.</param>
         /// <returns></returns>
-        public T Load<T>(LoadContext loadContext) where T : new() {            
+        public T Load<T>(LoadContext loadContext) where T : new()
+        {
             return Load<T>(loadContext, null, null);
         }
 
@@ -233,7 +256,8 @@ namespace AgFx {
         /// <param name="objectType">The object type to load</param>
         /// <param name="id"></param>
         /// <returns></returns>
-        public object Load(Type objectType, object id) {
+        public object Load(Type objectType, object id)
+        {
             var methodInfo = (from m in this.GetType().GetRuntimeMethods()
                               where m.Name == "Load" && m.ContainsGenericParameters && m.GetParameters().Length == 3
                               select m).First();
@@ -246,7 +270,8 @@ namespace AgFx {
         /// <summary>
         /// Non-generic version of load.
         /// </summary>        
-        public object Load(Type objectType, LoadContext loadContext) {
+        public object Load(Type objectType, LoadContext loadContext)
+        {
             return Load(objectType, (object)loadContext);
         }
 
@@ -258,8 +283,9 @@ namespace AgFx {
         /// <param name="completed">An action to fire when the operation has successfully completed.</param>
         /// <param name="error">An action to fire if there is an error in the processing of the operation.</param>
         /// <returns>The instance of the item to use/databind to.  As the loads complete, the properties of this instance will be updated.</returns>
-        public T Load<T>(object id, Action<T> completed, Action<Exception> error) where T : new() {
-            return Load<T>(AutoCreateLoadContext<T>(id), completed, error);
+        public T Load<T>(object id, Action<T> completed, Action<Exception> error) where T : new()
+        {
+            return Load<T>(_loadContextCreator.AutoCreateLoadContext<T>(id), completed, error);
         }
 
         /// <summary>
@@ -270,7 +296,8 @@ namespace AgFx {
         /// <param name="completed">An action to fire when the operation has successfully completed.</param>
         /// <param name="error">An action to fire if there is an error in the processing of the operation.</param>
         /// <returns>The instance of the item to use/databind to.  As the loads complete, the properties of this instance will be updated.</returns>
-        public T Load<T>(LoadContext loadContext, Action<T> completed, Action<Exception> error) where T : new() {
+        public T Load<T>(LoadContext loadContext, Action<T> completed, Action<Exception> error) where T : new()
+        {
             var cacheItem = Get<T>(loadContext, completed, error, true);
             return (T)cacheItem.GetValue(false);
         }
@@ -281,8 +308,9 @@ namespace AgFx {
         /// <typeparam name="T">The type of item to load</typeparam>
         /// <param name="id">The item's unique identifier.</param>
         /// <returns>The cached value, or a default instance if one is not available.</returns>
-        public T LoadFromCache<T>(object id) where T : new() {
-            var lc = AutoCreateLoadContext<T>(id);
+        public T LoadFromCache<T>(object id) where T : new()
+        {
+            var lc = _loadContextCreator.AutoCreateLoadContext<T>(id);
             return LoadFromCache<T>(lc);
         }
 
@@ -292,10 +320,9 @@ namespace AgFx {
         /// <typeparam name="T">The type of item to load</typeparam>
         /// <param name="loadContext">The item's LoadContext.</param>
         /// <returns>The cached value, or a default instance if one is not available.</returns>        
-        public T LoadFromCache<T>(LoadContext loadContext) where T : new() {
-
+        public T LoadFromCache<T>(LoadContext loadContext) where T : new()
+        {
             var cacheItem = GetFromCache<T>(loadContext);
-
             return (T)cacheItem.GetValue(true);
         }
 
@@ -305,7 +332,7 @@ namespace AgFx {
             {
                 ErrorLog.WriteErrorAsync("An unhandled error occurred", ex);
             }
-            var e = new DataManagerUnhandledExceptionEventArgs(ex, false);
+            DataManagerUnhandledExceptionEventArgs e = new DataManagerUnhandledExceptionEventArgs(ex, false);
             if (UnhandledError != null)
             {
                 UnhandledError(this, e);
@@ -339,20 +366,22 @@ namespace AgFx {
         /// </summary>
         /// <param name="writer">The text writer to write the report into</param>
         /// <param name="resetStats">True to reset sttistics after calling.</param>
-        public void GetStatisticsReport(TextWriter writer, bool resetStats) {
-
-            if (!ShouldCollectStatistics) {
+        public void GetStatisticsReport(TextWriter writer, bool resetStats)
+        {
+            if (!ShouldCollectStatistics)
+            {
                 throw new InvalidOperationException("ShoudlCollectStatistics is set to false, set it to true to enable statistics gathering.");
             }
 
-            if (_objectCache != null) {
-                
+            if (_objectCache != null)
+            {
                 // compute the totals
                 //
                 var statsbyType = from t in _objectCache.Values
                                   from ce in t.Values
                                   group ce by ce.ObjectType into ot
-                                  select new {
+                                  select new
+                                  {
                                       Type = ot.Key,
                                       Stats = ot.Select(ce2 => ce2._stats)
                                   };
@@ -362,88 +391,26 @@ namespace AgFx {
                                 from stats in sbt.Stats
                                 select stats;
 
-                if (writer != null) {
-                    GenerateStats("Totals", flatStats, writer);
+                if (writer != null)
+                {
+                    EntryStats.GenerateStats("Totals", flatStats, writer);
 
-                    foreach (var sbt in statsbyType) {
-                        GenerateStats("Statistics for " + sbt.Type.FullName, sbt.Stats, writer);
+                    foreach (var sbt in statsbyType)
+                    {
+                        EntryStats.GenerateStats("Statistics for " + sbt.Type.FullName, sbt.Stats, writer);
                     }
                 }
 
-                if (resetStats) {
-                    foreach (var s in flatStats) {
+                if (resetStats)
+                {
+                    foreach (var s in flatStats)
+                    {
                         s.Reset();
                     }
                 }
             }
         }
 
-        private static void GenerateStats(string groupName, IEnumerable<EntryStats> flatStats, TextWriter writer) {
-            var totalInstances = flatStats.Count();
-            var totalRequests = flatStats.Sum(s => s.RequestCount);
-            var totalFetchReqeusts = flatStats.Sum(s => s.FetchCount);
-            var totalFetchFail = flatStats.Sum(s => s.FetchFailCount);
-            var totalDeserializeFail = flatStats.Sum(s => s.DeserializeFailCount);
-
-            bool skipAvg = flatStats.Count() == 0;
-            
-            double cacheHitRate = skipAvg ? 0.0 : flatStats.Average(s => s.CacheHitRatio);
-            double avgFetch = skipAvg ? 0.0 : flatStats.Average(s => s.AverageFetchTime);
-            double avgDeserialize = skipAvg ? 0.0 : flatStats.Average(s => s.AverageDeserializeTime);
-            double avgSize = skipAvg ? 0.0 : flatStats.Average(s => s.AverageDataSize);
-            double avgUpdate = skipAvg ? 0.0 : flatStats.Average(s => s.AverageUpdateTime);
-
-            var maxFetch = from s in flatStats
-                           where s.MaxFetchTime == flatStats.Max(s2 => s2.MaxFetchTime)
-                           select s;
-
-            var maxDeserialize = from s in flatStats
-                                 where s.MaxDeserializeTime == flatStats.Max(s2 => s2.MaxDeserializeTime)
-                                 select s;
-
-            var maxSize = from s in flatStats
-                          where s.MaxDataSize == flatStats.Max(s2 => s2.MaxDataSize)
-                          select s;
-
-            var maxUpdate = from s in flatStats
-                            where s.MaxUpdateTime == flatStats.Max(s2 => s2.MaxUpdateTime)
-                            select s;
-
-            writer.WriteLine("{0}:", groupName);            
-            writer.WriteLine("\tTotal Instances: {0}", totalInstances);
-            writer.WriteLine("\tTotal Requests: {0}", totalRequests);
-            writer.WriteLine("\tTotal Fetches: {0}", totalFetchReqeusts);
-            writer.WriteLine("\tTotal Fetch Failures: {0}", totalFetchFail);
-            writer.WriteLine("\tTotal Deserialization Failures: {0}", totalDeserializeFail);
-            writer.WriteLine("\tCache Hit Rate: {0:0.00}", cacheHitRate);
-            writer.WriteLine("\tAverage Fetch Time: {0:0.0}ms", avgFetch);
-
-            if (maxFetch.Any()) {
-                var mf = maxFetch.First();
-                writer.WriteLine("\tMaximum Fetch Time: {0:0.0}ms (Object Type={1}, ID={2})", mf.MaxFetchTime, mf._cacheEntry.ObjectType.Name, mf._cacheEntry.LoadContext.Identity);
-            }
-
-            writer.WriteLine("\tAverage Deserialize Time: {0:0.0}ms", avgDeserialize);
-            if (maxDeserialize.Any()) {
-                var md = maxDeserialize.First();
-                writer.WriteLine("\tMaximum Deserialize Time: {0:0.0}ms (Object Type={1}, ID={2})", md.MaxDeserializeTime, md._cacheEntry.ObjectType.Name, md._cacheEntry.LoadContext.Identity);
-            }
-
-
-            writer.WriteLine("\tAverage Deserialize Size: {0:0.0} bytes", avgSize);
-            if (maxSize.Any()) {
-                var ms = maxSize.First();
-                writer.WriteLine("\tMaximum Deserialize Size: {0} bytes (Object Type={1}, ID={2})", ms.MaxDataSize, ms._cacheEntry.ObjectType.Name, ms._cacheEntry.LoadContext.Identity);
-            }
-
-            writer.WriteLine("\tAverage Update Time (UI Thread): {0:0.0}ms", avgUpdate);
-            if (maxUpdate.Any()) {
-                var mu = maxUpdate.First();
-                writer.WriteLine("\tMaximum Update Time (UI Thread): {0:0.0}ms (Object Type={1}, ID={2})", mu.MaxUpdateTime, mu._cacheEntry.ObjectType.Name, mu._cacheEntry.LoadContext.Identity);
-            }
-
-            writer.WriteLine("\r\n\r\n");
-        }
 
         /// <summary>
         /// Refresh an item's value
@@ -453,8 +420,9 @@ namespace AgFx {
         /// <param name="completed">An action to fire when the operation has successfully completed.</param>
         /// <param name="error">An action to fire if there is an error in the processing of the operation.</param>
         /// <returns>The instance of the item to use/databind to.  As the loads complete, the properties of this instance will be updated.</returns>
-        public T Refresh<T>(object id, Action<T> completed, Action<Exception> error) where T : new() {
-            return Refresh<T>(AutoCreateLoadContext<T>(id), completed, error);
+        public T Refresh<T>(object id, Action<T> completed, Action<Exception> error) where T : new()
+        {
+            return Refresh<T>(_loadContextCreator.AutoCreateLoadContext<T>(id), completed, error);
         }
 
         /// <summary>
@@ -465,16 +433,18 @@ namespace AgFx {
         /// <param name="completed">An action to fire when the operation has successfully completed.</param>
         /// <param name="error">An action to fire if there is an error in the processing of the operation.</param>
         /// <returns>The instance of the item to use/databind to.  As the loads complete, the properties of this instance will be updated.</returns>
-        public T Refresh<T>(LoadContext loadContext, Action<T> completed, Action<Exception> error) where T : new() {
+        public T Refresh<T>(LoadContext loadContext, Action<T> completed, Action<Exception> error) where T : new()
+        {
             Invalidate<T>(loadContext);
-            return Load<T>(loadContext, completed, error);            
+            return Load<T>(loadContext, completed, error);
         }
 
         /// <summary>
         /// Refresh the specified IUpdateable item.
         /// </summary>
         /// <param name="item"></param>
-        internal void Refresh(IUpdatable item) {
+        internal void Refresh(IUpdatable item)
+        {
 
             var methodInfo = (from m in this.GetType().GetRuntimeMethods()
                               where m.Name == "Refresh" && m.ContainsGenericParameters
@@ -491,7 +461,8 @@ namespace AgFx {
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="value">The instance to update.</param>
-        public void RegisterProxy<T>(T value) where T : ILoadContextItem, new() {
+        public void RegisterProxy<T>(T value) where T : ILoadContextItem, new()
+        {
             RegisterProxy<T>(value, false, null, true);
         }
 
@@ -504,18 +475,22 @@ namespace AgFx {
         /// <param name="doLoad">Initiate a load for this item, which will cause it to be updated with new data if a fetch is needed.</param>
         /// <param name="update">A handler to fire when this instance is updated.</param>
         /// <param name="canUseAsInitialValue">True to have this value returned for the default value of a subsequent Load call, assuming no value currently exists for the item. Otherwise this is ignored.</param>
-        public void RegisterProxy<T>(T value, bool doLoad, Action<T> update, bool canUseAsInitialValue) where T : ILoadContextItem, new() {
-            if (value == null || value.LoadContext == null) {
+        public void RegisterProxy<T>(T value, bool doLoad, Action<T> update, bool canUseAsInitialValue) where T : ILoadContextItem, new()
+        {
+            if (value == null || value.LoadContext == null)
+            {
                 throw new ArgumentNullException();
             }
 
-            ProxyEntry pe = new ProxyEntry {
+            ProxyEntry pe = new ProxyEntry
+            {
                 LoadContext = value.LoadContext,
                 ObjectType = typeof(T),
                 ProxyReference = new WeakReference(value),
                 UpdateAction = () =>
                 {
-                    if (update != null) {
+                    if (update != null)
+                    {
                         update(value);
                     }
                 },
@@ -524,7 +499,8 @@ namespace AgFx {
 
             AddProxy(pe);
 
-            if (doLoad) {
+            if (doLoad)
+            {
                 DataManager.Current.Load<T>(value.LoadContext);
             }
 
@@ -535,7 +511,8 @@ namespace AgFx {
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="value"></param>
-        public void UnregisterProxy<T>(T value) {
+        public void UnregisterProxy<T>(T value)
+        {
             RemoveProxy(value);
         }
 
@@ -549,28 +526,32 @@ namespace AgFx {
         /// <typeparam name="T"></typeparam>
         /// <param name="instance">The instance to save into the cache.</param>
         /// <param name="loadContext"></param>
-        public void Save<T>(T instance, LoadContext loadContext) where T : new() {
-
-            if (instance == null) {
+        public void Save<T>(T instance, LoadContext loadContext) where T : new()
+        {
+            if (instance == null)
+            {
                 throw new ArgumentNullException("instance");
             }
 
-            if (loadContext == null) {
+            if (loadContext == null)
+            {
                 throw new ArgumentNullException("loadContext");
             }
 
             var cacheEntry = Get<T>(loadContext, null, null, false);
 
-            if (!cacheEntry.SerializeDataToCache(instance, DateTime.Now, null, true)) {
+            if (!cacheEntry.SerializeDataToCache(instance, DateTime.Now, null, true))
+            {
                 throw new InvalidOperationException("Instance could not be serialized.  Ensure that its DataLoader implements IDataLoader and the SerializeOptimizedData method properly serializes the data.");
             }
-            else {
+            else
+            {
                 cacheEntry.UpdateValue(instance, loadContext);
             }
         }
 
-
-        private class ProxyEntry {
+        private class ProxyEntry
+        {
             public WeakReference ProxyReference { get; set; }
             public Type ObjectType { get; set; }
             public LoadContext LoadContext { get; set; }
@@ -580,21 +561,25 @@ namespace AgFx {
 
         private static Dictionary<object, List<ProxyEntry>> _proxies = new Dictionary<object, List<ProxyEntry>>();
 
-        private void CleanupProxies() {
+        private void CleanupProxies()
+        {
             var deadProxies = from pel in _proxies.Values
                               from p in pel
                               where p.ProxyReference != null && !p.ProxyReference.IsAlive
                               select p;
 
-            foreach (var dp in deadProxies.ToArray()) {
+            foreach (var dp in deadProxies.ToArray())
+            {
                 RemoveProxy(dp);
             }
         }
 
-        private void AddProxy(ProxyEntry pe) {
+        private void AddProxy(ProxyEntry pe)
+        {
             List<ProxyEntry> proxyList;
 
-            if (!_proxies.TryGetValue(pe.LoadContext, out proxyList)) {
+            if (!_proxies.TryGetValue(pe.LoadContext, out proxyList))
+            {
                 proxyList = new List<ProxyEntry>();
                 _proxies[pe.LoadContext] = proxyList;
             }
@@ -603,18 +588,22 @@ namespace AgFx {
                                 where p.ProxyReference.Target == pe.ProxyReference.Target
                                 select p;
 
-            if (!existingProxy.Any()) {
+            if (!existingProxy.Any())
+            {
                 proxyList.Add(pe);
             }
-            else {
+            else
+            {
                 //  throw new ArgumentException("Proxy already added for object " + pe.ObjectType.Name);
             }
         }
 
-        private IEnumerable<ProxyEntry> GetProxies<T>(LoadContext lc) {
+        private IEnumerable<ProxyEntry> GetProxies<T>(LoadContext lc)
+        {
             List<ProxyEntry> proxyList;
 
-            if (!_proxies.TryGetValue(lc, out proxyList)) {
+            if (!_proxies.TryGetValue(lc, out proxyList))
+            {
                 return new ProxyEntry[0];
             }
 
@@ -625,133 +614,64 @@ namespace AgFx {
             return proxies.ToArray();
         }
 
-        private void RemoveProxy(ProxyEntry pe) {
+        private void RemoveProxy(ProxyEntry pe)
+        {
             List<ProxyEntry> proxyList;
 
-            if (_proxies.TryGetValue(pe.LoadContext, out proxyList)) {
+            if (_proxies.TryGetValue(pe.LoadContext, out proxyList))
+            {
                 proxyList.Remove(pe);
             }
         }
 
-        private void RemoveProxy(object value) {
+        private void RemoveProxy(object value)
+        {
             var proxy = from pel in _proxies.Values
                         from p in pel
                         where p.ProxyReference != null && p.ProxyReference.Target == value
                         select p;
 
 
-            foreach (var p in proxy) {
+            foreach (var p in proxy)
+            {
                 RemoveProxy(p);
             }
         }
 
-      
-        private static readonly Dictionary<Type, Dictionary<object, CacheEntry>> _objectCache = new Dictionary<Type, Dictionary<object, CacheEntry>>();
-
-        private LoadContext AutoCreateLoadContext<T>(object value)
+        internal CacheEntry Get<T>(object identity) where T : new()
         {
-            var valueAsLoadContext = value as LoadContext;
-            if (valueAsLoadContext != null)
-            {
-                return valueAsLoadContext;
-            }
-
-            ConstructorInfo ci;
-
-            bool valueExists = false;
-
-            lock (_loadContextTypes)
-            {
-                valueExists = _loadContextTypes.TryGetValue(typeof(T), out ci);
-            }
-
-            if (!valueExists)
-            {
-                bool hasLoadContextProperty = false;
-
-                var loadContextProps = from pi in typeof(T).GetRuntimeProperties()
-                                       where typeof(LoadContext).IsAssignableFrom(pi.PropertyType) && pi.Name == "LoadContext"
-                                       select pi;
-
-                foreach (var lcProp in loadContextProps)
-                {
-                    hasLoadContextProperty = true;
-                    Type lcType = lcProp.PropertyType;
-
-                    // check the type's ctor.
-                    //
-                    var ctors = from c in lcType.GetTypeInfo().DeclaredConstructors
-                                where c.GetParameters() != null &&
-                                      c.GetParameters().Length == 1 &&
-                                      c.GetParameters()[0].ParameterType.IsInstanceOfType(value)
-                                select c;
-
-                    Debug.WriteLine(lcType.GetTypeInfo().DeclaredConstructors);
-
-                    ci = ctors.FirstOrDefault();
-
-                    if (ci != null)
-                    {
-                        lock (_loadContextTypes)
-                        {
-                            _loadContextTypes[typeof(T)] = ci;
-                        }
-                        break;
-                    }
-                }
-
-                if (!hasLoadContextProperty)
-                {
-                    // this is a poco, just return the default thing.
-                    //
-                    lock (_loadContextTypes)
-                    {
-                        _loadContextTypes[typeof(T)] = null;
-                    }
-                }
-                else if (ci == null)
-                {
-                    throw new ArgumentException("Could not auto create a LoadContext for type.  Make sure the type has a property called LoadContext of the appropriate type, and that it has a public constructor that takes the instance value type" + typeof(T).FullName);
-                }
-            }
-
-            if (ci != null)
-            {
-                return (LoadContext)ci.Invoke(new object[] { value });
-            }
-            else
-            {
-                return new LoadContext(value);
-            }
-        }
-
-        internal CacheEntry Get<T>(object identity) where T : new() {
             return Get<T>(identity, null, null, false);
         }
-        
+
         /// <summary>
         /// Get the Entry for a given type/id pair and set it up if necessary.
         /// </summary>
-        private CacheEntry Get<T>(object identity, Action<T> completed, Action<Exception> error, bool resetCallbacks) where T : new() {
+        private CacheEntry Get<T>(object identity, Action<T> completed, Action<Exception> error, bool resetCallbacks) where T : new()
+        {
 
-            LoadContext loadContext = AutoCreateLoadContext<T>(identity);
+            LoadContext loadContext = _loadContextCreator.AutoCreateLoadContext<T>(identity);
 
             return Get<T>(loadContext, completed, error, resetCallbacks);
         }
 
-        private CacheEntry Get<T>(LoadContext loadContext, Action<T> completed, Action<Exception> error, bool resetCallbacks) where T : new() {
+        private CacheEntry Get<T>(LoadContext loadContext, Action<T> completed, Action<Exception> error, bool resetCallbacks) where T : new()
+        {
 
-            if (loadContext == null) {
+            if (loadContext == null)
+            {
                 throw new ArgumentNullException("LoadContext required.");
             }
 
             object identity = loadContext.UniqueKey;
 
             CacheEntry value;
-            lock (_objectCache) {
-                if (_objectCache.ContainsKey(typeof(T)) && _objectCache[typeof(T)].TryGetValue(identity, out value)) {
+            lock (_objectCache)
+            {
+                if (_objectCache.ContainsKey(typeof(T)) && _objectCache[typeof(T)].TryGetValue(identity, out value))
+                {
                     value.LoadContext = loadContext;
-                    if (resetCallbacks) {
+                    if (resetCallbacks)
+                    {
                         SetupCompletedCallback<T>(completed, error, value);
                     }
                     return value;
@@ -778,37 +698,39 @@ namespace AgFx {
                         }
                     }
                 };
-            
+
             // create a new one.
             //
             value = new CacheEntry(loadContext, objectType, proxyCallback);
             value.NextCompletedAction.UnhandledError = OnUnhandledError;
 
-            object loader = GetDataLoader(value);           
-           
+            object loader = GetDataLoader(value);
+
             // How to create a new value.  It's just a new.
             //
             value.CreateDefaultAction = () =>
-            {              
+            {
 
                 // if there is a proxy already registered, use it as the key value.
                 //
                 var proxy = GetProxies<T>(loadContext).FirstOrDefault();
 
-                if (proxy != null && proxy.ProxyReference != null && proxy.ProxyReference.IsAlive) {
+                if (proxy != null && proxy.ProxyReference != null && proxy.ProxyReference.IsAlive)
+                {
                     return proxy.ProxyReference.Target;
                 }
-                
+
                 var item = new T();
 
-                if (item is ILoadContextItem) {
+                if (item is ILoadContextItem)
+                {
                     ((ILoadContextItem)item).LoadContext = value.LoadContext;
                 }
 
                 return item;
             };
-           
-            SetupCompletedCallback<T>(completed, error, value);           
+
+            SetupCompletedCallback<T>(completed, error, value);
 
             // How to load a new value.
             //
@@ -820,8 +742,9 @@ namespace AgFx {
                 Debug.Assert(loader != null, "Failed to get loader for " + typeof(T).Name);
                 var request = DataLoaderProxy.GetLoadRequest(loader, value.LoadContext, typeof(T));
 
-                if (request == null) {
-                    Debug.WriteLine("{0}: Aborting load for {1}, ID={2}, because {3}.GetLoadRequest returned null.", DateTime.Now, typeof(T).Name,  value.LoadContext.Identity, loader.GetType().Name);
+                if (request == null)
+                {
+                    Debug.WriteLine("{0}: Aborting load for {1}, ID={2}, because {3}.GetLoadRequest returned null.", DateTime.Now, typeof(T).Name, value.LoadContext.Identity, loader.GetType().Name);
                     return false;
                 }
 
@@ -831,19 +754,22 @@ namespace AgFx {
                 request.Execute(
                     (result) =>
                     {
-                        if (result == null) {
+                        if (result == null)
+                        {
                             throw new ArgumentNullException("result", "Execute must return a LoadRequestResult value.");
                         }
-                        if (result.Error == null) {
+                        if (result.Error == null)
+                        {
                             lvl.OnLoadSuccess(result.Stream);
                         }
-                        else {
+                        else
+                        {
                             lvl.OnLoadFail(new LoadRequestFailedException(lvl.CacheEntry.ObjectType, value.LoadContext, result.Error));
                         }
                         IsLoading = false;
                     }
                );
-               return true;
+                return true;
             };
 
 
@@ -857,24 +783,29 @@ namespace AgFx {
                 //                
                 object deserializedObject = null;
 
-                if (isOptimized) {
+                if (isOptimized)
+                {
 
                     var idl = (IDataOptimizer)loader;
 
-                    if (idl == null) {
+                    if (idl == null)
+                    {
                         throw new InvalidOperationException("Data is optimized but object does not implmenent IDataOptimizer");
                     }
                     deserializedObject = idl.DeserializeOptimizedData(value.LoadContext, objectType, data);
                 }
-                else {
+                else
+                {
                     deserializedObject = DataLoaderProxy.Deserialize(loader, value.LoadContext, objectType, data);
                 }
 
-                if (deserializedObject == null) {
+                if (deserializedObject == null)
+                {
                     throw new InvalidOperationException(String.Format("Deserialize returned null for {0}, id='{1}'", objectType.Name, id));
                 }
 
-                if (!objectType.IsInstanceOfType(deserializedObject)) {
+                if (!objectType.IsInstanceOfType(deserializedObject))
+                {
                     throw new InvalidOperationException(String.Format("Returned object is {0} when {1} was expected", deserializedObject.GetType().Name, objectType.Name));
                 }
                 return deserializedObject;
@@ -882,7 +813,8 @@ namespace AgFx {
 
             // if this thing knows how to optimize, hook that up.
             //
-            if (loader is IDataOptimizer) {
+            if (loader is IDataOptimizer)
+            {
                 value.SerializeOptimizedDataAction = (obj, stream) =>
                 {
                     var idl = (IDataOptimizer)loader;
@@ -892,8 +824,10 @@ namespace AgFx {
 
             // finally push the value into the cache.
 
-            lock (_objectCache) {
-                if (!_objectCache.ContainsKey(objectType)) {
+            lock (_objectCache)
+            {
+                if (!_objectCache.ContainsKey(objectType))
+                {
                     Dictionary<object, CacheEntry> typeDictionary = new Dictionary<object, CacheEntry>();
                     _objectCache[typeof(T)] = typeDictionary;
                 }
@@ -908,14 +842,13 @@ namespace AgFx {
         /// <typeparam name="T"></typeparam>
         /// <param name="identity"></param>
         /// <returns></returns>
-        private CacheEntry GetFromCache<T>(object identity) where T : new() {
+        private CacheEntry GetFromCache<T>(object identity) where T : new()
+        {
             var cacheEntry = Get<T>(identity, null, null, true);
 
             cacheEntry.LoadFromCache();
             return cacheEntry;
         }
-        
-  
 
         /// <summary>
         /// Setup the callbacks to fire upon completiion of the next load operation.
@@ -924,15 +857,16 @@ namespace AgFx {
         /// <param name="completed"></param>
         /// <param name="error"></param>
         /// <param name="value"></param>
-        private void SetupCompletedCallback<T>(Action<T> completed, Action<Exception> error, CacheEntry value) where T : new() {
-                value.NextCompletedAction.Subscribe(completed, error);
+        private void SetupCompletedCallback<T>(Action<T> completed, Action<Exception> error, CacheEntry value) where T : new()
+        {
+            value.NextCompletedAction.Subscribe(completed, error);
         }
 
         /// <summary>
         ///  cache loaders by type.
         /// </summary>
-        private readonly Dictionary<Type, object> _loaders = new Dictionary<Type, object>();        
-        private readonly Dictionary<Type, ConstructorInfo> _loadContextTypes = new Dictionary<Type, ConstructorInfo>();
+        private readonly Dictionary<Type, object> _loaders = new Dictionary<Type, object>();
+        private static readonly Dictionary<Type, Dictionary<object, CacheEntry>> _objectCache = new Dictionary<Type, Dictionary<object, CacheEntry>>();
 
         /// <summary>
         /// Figure out what dataloader to use for the entry type.
@@ -991,7 +925,7 @@ namespace AgFx {
 
                     if (loaderTypeInfo != null)
                     {
-                        loader = Activator.CreateInstance(loaderTypeInfo.BaseType);
+                        loader = Activator.CreateInstance(loaderTypeInfo.AsType());
 
                         // if we're walking base types, save this value so that the subsequent requests will get it.
                         //

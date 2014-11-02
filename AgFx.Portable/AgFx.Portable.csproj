@@ -37,6 +37,7 @@
     <Compile Include="Authorisation\LoginDataLoader.cs" />
     <Compile Include="Authorisation\LoginLoadContext.cs" />
     <Compile Include="Authorisation\LoginModel.cs" />
+    <Compile Include="AutoLoadContextCreator.cs" />
     <Compile Include="BatchObservableCollection.cs" />
     <Compile Include="CacheEntry.cs" />
     <Compile Include="CacheItemInfo.cs" />

@@ -73,14 +73,10 @@ namespace AgFx
         {
             try
             {
-
-                var newestItem = GetItems(uniqueName).
-                                OrderByDescending(i => i.ExpirationTime).
-                                    FirstOrDefault();
-
+                var newestItem = GetItems(uniqueName)
+                    .OrderByDescending(i => i.ExpirationTime)
+                    .FirstOrDefault();
                 return newestItem;
-
-
             }
             catch
             {

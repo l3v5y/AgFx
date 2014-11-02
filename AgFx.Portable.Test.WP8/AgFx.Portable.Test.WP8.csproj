@@ -84,6 +84,11 @@
     </Compile>
     <Compile Include="Mocks\NoCacheObject.cs" />
     <Compile Include="Mocks\ShortCacheObject.cs" />
+    <Compile Include="Mocks\TestContextObject.cs" />
+    <Compile Include="Mocks\TestLoadContext.cs" />
+    <Compile Include="Mocks\TestLoadRequest.cs" />
+    <Compile Include="Mocks\TestDerivedNestedLoaderObject.cs" />
+    <Compile Include="Mocks\TestNestedLoaderObject.cs" />
     <Compile Include="Mocks\ValidCacheOnlyObject.cs" />
     <Compile Include="Mocks\VariableCacheObject.cs" />
     <Compile Include="NotifyPropertyChangedBaseTests.cs" />

@@ -1,16 +1,10 @@
-﻿#if WINDOWS_PHONE
+﻿using AgFx.Test.Mocks;
 using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-#else
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-#endif
-
 using System;
 using System.ComponentModel;
 using System.IO;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
-using AgFx.Test.Mocks;
 
 namespace AgFx.Test
 {
@@ -61,7 +55,10 @@ namespace AgFx.Test
                     resetEvent.Set();
                 }
             );
-            resetEvent.WaitOne();
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
@@ -91,10 +88,7 @@ namespace AgFx.Test
             var t = DateTime.Now.ToString();
             DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream(t, -1).GetBuffer());
 
-            val = DataManager.Current.Load<ShortCacheObject>(lc,
-                 (v) =>
-                 {
-
+            val = DataManager.Current.Load<ShortCacheObject>(lc,                 (v) =>                 {
                      string oldDefault = ShortCacheObject.DefaultStringValue;
                      // we've got a value
                      Assert.AreEqual(t, v.StringProp);
@@ -113,17 +107,17 @@ namespace AgFx.Test
                          {
                              Assert.Fail(ex2.Message);
                              resetEvent.Set();
-                         }
-
-                     );
-
+                         });
                  },
                  (ex) =>
                  {
                      Assert.Fail(ex.Message);
                      resetEvent.Set();
                  });
-            resetEvent.WaitOne();
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
@@ -156,7 +150,10 @@ namespace AgFx.Test
                      Assert.Fail(ex.Message);
                      resetEvent.Set();
                  });
-            resetEvent.WaitOne();
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
@@ -172,10 +169,7 @@ namespace AgFx.Test
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddHours(1));
             DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream(time, -1).GetBuffer());
 
-            Thread.Sleep(250);
-
             TestInvalidateCore(lc, time);
-
         }
 
         private void TestInvalidateCore(LoadContext lc, string time)
@@ -192,7 +186,6 @@ namespace AgFx.Test
                     DataManager.Current.Load<ShortCacheObject>(lc,
                         (sco2) =>
                         {
-
                             // verify we got the right thing
                             //
                             Assert.AreEqual(time, sco2.StringProp);
@@ -214,14 +207,12 @@ namespace AgFx.Test
                             DataManager.Current.Load<ShortCacheObject>(lc,
                                 (sco3) =>
                                 {
-
                                     // verify we got the right thing
                                     //
                                     Assert.AreNotEqual(time, sco3.StringProp);
 
                                     ShortCacheObject.DefaultStringValue = "DefaultString";
                                     resetEvent.Set();
-
                                 },
                                 (ex) =>
                                 {
@@ -229,7 +220,6 @@ namespace AgFx.Test
                                     ShortCacheObject.DefaultStringValue = "DefaultString";
                                     resetEvent.Set();
                                 });
-
 
                         },
                         (ex) =>
@@ -246,7 +236,10 @@ namespace AgFx.Test
                     resetEvent.Set();
                 }
                 );
-            resetEvent.WaitOne();
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
@@ -272,18 +265,15 @@ namespace AgFx.Test
 
             ShortCacheObject.SCOLoadRequest.Error = new InvalidCastException();
 
-
             val = DataManager.Current.Load<ShortCacheObject>(ShortCacheObject.DefaultIdentifier,
                  (v) =>
                  {
                      ShortCacheObject.SCOLoadRequest.Error = null;
                      Assert.Fail("Load should have failed.");
                      resetEvent.Set();
-
                  },
                  (ex) =>
                  {
-
                      string oldDefault = ShortCacheObject.DefaultStringValue;
 
                      // we should not get a value.
@@ -307,27 +297,23 @@ namespace AgFx.Test
                          {
                              Assert.Fail(ex2.Message);
                              resetEvent.Set();
-
-                         }
-
-                     );
-
-
+                         });
                  });
-            resetEvent.WaitOne();
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
-#if WINDOWS_PHONE2
         [TestMethod]
-        [Asynchronous]
         public void TestLoadWithExpiredCache()
         {
+            var resetEvent = new ManualResetEvent(false);
+
             string uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), new LoadContext("ExpiredItem"));
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddSeconds(-10));
             DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream("ExpiredItemValue", -1).GetBuffer());
-            Thread.Sleep(100); // let the write happen;
             // slow down the load so we get the cache value.
-            //
             var oldTime = ShortCacheObject.SCOLoadRequest.LoadTimeMs;
             ShortCacheObject.SCOLoadRequest.LoadTimeMs = 1000;
 
@@ -337,47 +323,50 @@ namespace AgFx.Test
                     ShortCacheObject.SCOLoadRequest.LoadTimeMs = oldTime;
                     Assert.IsNotNull(v);
                     Assert.AreEqual("ExpiredItemValue", v.StringProp);
-                    TestComplete();
+                    resetEvent.Set();
                 },
                 (ex) =>
                 {
                     Assert.Fail(ex.Message);
-                    TestComplete();
+                    resetEvent.Set();
                 });
-
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestLoadRequestError()
         {
+            var resetEvent = new ManualResetEvent(false);
             ShortCacheObject.SCOLoadRequest.Error = new Exception("blah");
-
 
             DataManager.Current.Load<ShortCacheObject>("LoadEror",
                (v) =>
                {
                    Assert.Fail("This should have failed");
-                   TestComplete();
-
+                   resetEvent.Set();
                },
                (ex) =>
                {
                    Assert.IsNotNull(ex);
                    Assert.AreEqual(ShortCacheObject.SCOLoadRequest.Error, ex.InnerException);
                    ShortCacheObject.SCOLoadRequest.Error = null;
-                   TestComplete();
-
+                   resetEvent.Set();
                });
-
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestLoadRequestErrorUnhandled()
         {
-            ShortCacheObject.SCOLoadRequest.Error = new Exception("blah");
+            var resetEvent = new ManualResetEvent(false);
 
+            ShortCacheObject.SCOLoadRequest.Error = new Exception("blah");
 
             EventHandler<DataManagerUnhandledExceptionEventArgs> handler = null;
 
@@ -388,8 +377,7 @@ namespace AgFx.Test
                 Assert.AreEqual(ShortCacheObject.SCOLoadRequest.Error, e.Exception.InnerException);
                 ShortCacheObject.SCOLoadRequest.Error = null;
 
-                TestComplete();
-
+                resetEvent.Set();
                 e.Handled = true;
             };
 
@@ -399,19 +387,20 @@ namespace AgFx.Test
                (v) =>
                {
                    Assert.Fail("This should have failed");
-                   TestComplete();
-
+                   resetEvent.Set();
                },
-               null
-            );
+               null);
 
-
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestUpdating()
         {
+            var resetEvent = new ManualResetEvent(false);
             DataManager.Current.Load<ShortCacheObject>("Updating",
                 (s) =>
                 {
@@ -442,35 +431,31 @@ namespace AgFx.Test
                                 Assert.Fail();
                             }
                         }
-
                     };
 
                     s.PropertyChanged += h;
 
-                    DataManager.Current.Refresh<ShortCacheObject>("Updating",
-                        (s2) =>
+                    DataManager.Current.Refresh<ShortCacheObject>("Updating", (s2) =>
+                    {
+                        Assert.IsFalse(s.IsUpdating);
+                        if (!gotUpdatingTrue || !gotUpdatingFalse)
                         {
-                            Assert.IsFalse(s.IsUpdating);
-                            if (!gotUpdatingTrue || !gotUpdatingFalse)
-                            {
-                                Assert.Fail();
-                            }
-
-                            TestComplete();
-
-                        },
-                        null
-                        );
-
+                            Assert.Fail();
+                        }
+                        resetEvent.Set();
+                    }, null);
                 },
-                null
-            );
+                null);
+            if (!resetEvent.WaitOne(1000))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestDesrializeFail()
         {
+            var resetEvent = new ManualResetEvent(false);
             string id = "DeserializeFail";
             DataManager.Current.Clear<ShortCacheObject>(id);
             string msg = DateTime.Now.ToString();
@@ -481,22 +466,24 @@ namespace AgFx.Test
                 {
                     ShortCacheObject.FailDeserializeMessage = null;
                     Assert.Fail();
-                    TestComplete();
-
+                    resetEvent.Set();
                 },
                 (ex) =>
                 {
                     ShortCacheObject.FailDeserializeMessage = null;
                     Assert.AreEqual(msg, ex.Message);
-                    TestComplete();
-
+                    resetEvent.Set();
                 });
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestDeserializeFailUnhandled()
         {
+            var resetEvent = new ManualResetEvent(false);
             string id = "DeserializeFail";
             DataManager.Current.Clear<ShortCacheObject>(id);
             string msg = DateTime.Now.ToString();
@@ -510,8 +497,7 @@ namespace AgFx.Test
                 DataManager.Current.UnhandledError -= handler;
                 ShortCacheObject.FailDeserializeMessage = null;
                 Assert.AreEqual(msg, e.Exception.Message);
-                TestComplete();
-
+                resetEvent.Set();
                 e.Handled = true;
             };
 
@@ -522,18 +508,20 @@ namespace AgFx.Test
                 {
                     ShortCacheObject.FailDeserializeMessage = null;
                     Assert.Fail();
-                    TestComplete();
-
+                    resetEvent.Set();
                 },
                 null
             );
-
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestDeserializeCacheFail()
         {
+            var resetEvent = new ManualResetEvent(false);
             string id = "DeserializeCacheFail";
 
             string uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), new LoadContext(id));
@@ -553,35 +541,41 @@ namespace AgFx.Test
                 {
                     ShortCacheObject.DefaultIntValue = 1234;
                     Assert.AreEqual(val, sco.IntProp);
-                    TestComplete();
-
+                    resetEvent.Set();
                 },
                 (ex) =>
                 {
 
                     Assert.Fail();
-                    TestComplete();
-
+                    resetEvent.Set();
                 });
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestDataLoaderLiveLoad()
         {
+            var resetEvent = new ManualResetEvent(false);
             var dval = DateTime.Now.ToString();
             DataManager.Current.Load<TestPoco>(dval,
                  (tp) =>
                  {
                      Assert.AreEqual(dval, tp.Value);
-                     TestComplete();
+                     resetEvent.Set();
                  },
                  (ex) =>
                  {
                      Assert.Fail();
-                     TestComplete();
+                     resetEvent.Set();
                  }
             );
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
@@ -595,16 +589,17 @@ namespace AgFx.Test
             var cii = new CacheItemInfo(uniqueName, timestamp, timestamp);
             DataManager.StoreProvider.Write(cii, UTF8Encoding.UTF8.GetBytes(dval));
 
-            DataManager.Current.Cleanup(DateTime.Now.AddDays(-1),
-                () =>
-                {
-                    var item = DataManager.StoreProvider.GetLastestExpiringItem(uniqueName);
-                    Assert.IsNull(item);
-                    resetEvent.Set();
-                });
-            resetEvent.WaitOne();
+            DataManager.Current.Cleanup(DateTime.Now.AddDays(-1), () =>
+            {
+                var item = DataManager.StoreProvider.GetLastestExpiringItem(uniqueName);
+                Assert.IsNull(item);
+                resetEvent.Set();
+            });
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
-
 
         [TestMethod]
         public void TestDataLoaderCacheLoad()
@@ -627,11 +622,12 @@ namespace AgFx.Test
                 {
                     Assert.Fail();
                     resetEvent.Set();
-                }
-           );
-            resetEvent.WaitOne();
+                });
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
-
 
         [DataLoader(typeof(TestDataLoader))]
         public class TestPoco
@@ -641,9 +637,7 @@ namespace AgFx.Test
 
         public class TestPocoDerived : TestPoco
         {
-
         }
-
 
         public class TestDataLoader : IDataLoader<LoadContext>
         {
@@ -697,9 +691,10 @@ namespace AgFx.Test
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestNoCacheObject()
         {
+            var resetEvent = new ManualResetEvent(false);
+
             var strValue = DateTime.Now.ToString();
 
             ShortCacheObject.DefaultStringValue = strValue;
@@ -717,29 +712,28 @@ namespace AgFx.Test
                     {
 
                         Assert.AreEqual(strValue, v2.StringProp);
-                        TestComplete();
-
+                        resetEvent.Set();
                     },
                     (ex2) =>
                     {
                         Assert.Fail();
-                        TestComplete();
-
+                        resetEvent.Set();
                     });
-
 
             },
             (ex) =>
             {
                 Assert.Fail();
-                TestComplete();
-
+                resetEvent.Set();
             });
 
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestValidCacheOnlyObjectWithValidCache()
         {
             var cacheValue = DateTime.Now.ToString();
@@ -749,7 +743,6 @@ namespace AgFx.Test
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestValidCacheOnlyObjectWithInvalidCache()
         {
             var cacheValue = DateTime.Now.ToString();
@@ -760,6 +753,7 @@ namespace AgFx.Test
 
         private void TestValidCacheCore(string cachedValue, string newValue, string expectedValue, int secondsUntilCacheExpires)
         {
+            var resetEvent = new ManualResetEvent(false);
             string uniqueName = CacheEntry.BuildUniqueName(typeof(ValidCacheOnlyObject), new LoadContext("VCO"));
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddSeconds(secondsUntilCacheExpires));
             DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream(cachedValue, -1).GetBuffer());
@@ -772,40 +766,43 @@ namespace AgFx.Test
             (v1) =>
             {
                 Assert.AreEqual(expectedValue, v1.StringProp);
-                TestComplete();
-
+                resetEvent.Set();
             },
             (ex) =>
             {
                 Assert.Fail();
-                TestComplete();
-
+                resetEvent.Set();
             });
 
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
 
         [TestMethod]
-        [Asynchronous]
         public void TestNestedLoader()
         {
+            var resetEvent = new ManualResetEvent(false);
             string id = "nlo";
             DataManager.Current.Load<TestNestedLoaderObject>(id,
                 (val) =>
                 {
                     Assert.AreEqual(id, val.StrValue);
-                    TestComplete();
-
+                    resetEvent.Set();
                 },
-                null
-            );
-
+                null);
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestRegisterProxy()
         {
+            var resetEvent = new ManualResetEvent(false);
             int propValue = 999;
 
             ShortCacheObject sco = new ShortCacheObject("Proxy");
@@ -818,18 +815,20 @@ namespace AgFx.Test
                     Assert.AreNotEqual(propValue, obj.IntProp);
                     Assert.AreEqual(ShortCacheObject.DefaultIntValue, obj.IntProp);
                     Assert.AreEqual(ShortCacheObject.DefaultIntValue, sco.IntProp);
-                    TestComplete();
-
+                    resetEvent.Set();
                 },
-                false
-            );
+                false);
 
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestUnusedObjectGC()
         {
+            var resetEvent = new ManualResetEvent(false);
             DataManager.Current.Load<TestPoco>("GC",
                 (tp2) =>
                 {
@@ -842,8 +841,7 @@ namespace AgFx.Test
                         {
                             GC.Collect();
                             Assert.IsTrue(entry.HasBeenGCd);
-                            TestComplete();
-
+                            resetEvent.Set();
                         });
 
                     Assert.IsFalse(entry.HasBeenGCd);
@@ -852,44 +850,46 @@ namespace AgFx.Test
                 (ex) =>
                 {
                     Assert.Fail();
-                    TestComplete();
-
-                }
-           );
-
+                    resetEvent.Set();
+                });
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
-
         [TestMethod]
+        [Ignore]
         public void TestAutoContextCreation()
         {
-            var manualResetEvent = new ManualResetEvent(false);
+            var resetEvent = new ManualResetEvent(false);
             // verify auto creation of context.
             var obj = DataManager.Current.Load<TestContextObject>(4321,
                 (success) =>
                 {
                     Assert.IsTrue(success.DeserializedValue.StartsWith(typeof(TestLoadContext).Name));
-                    manualResetEvent.Set();
+                    resetEvent.Set();
                 },
                 (error) =>
                 {
                     Assert.Fail(error.Message);
-                    manualResetEvent.Set();
+                    resetEvent.Set();
                 });
-            manualResetEvent.WaitOne();
+            if (!resetEvent.WaitOne(1000))
+            {
+                Assert.Fail();
+            }
         }
-
 
         [TestMethod]
         public void TestVariableExpirationDefault()
         {
-            var manualResetEvent = new ManualResetEvent(false);
+            var resetEvent = new ManualResetEvent(false);
             var date = default(DateTime);
             var lc = new VariLoadContext(date);
             lc.Foo = 1;
 
-            DataManager.Current.Load<VariableCacheObject>(lc,
-                (vco) =>
+            DataManager.Current.Load<VariableCacheObject>(lc, (vco) =>
                 {
                     Assert.IsNull(vco.ExpirationTime);
 
@@ -906,28 +906,31 @@ namespace AgFx.Test
                                Assert.IsNull(vco2.ExpirationTime);
                                Assert.AreEqual(lc.Foo, vco2.Foo);
 
-                               manualResetEvent.Set();
+                               resetEvent.Set();
                            },
                            (ex2) =>
                            {
                                Assert.Fail();
-                               manualResetEvent.Set();
+                               resetEvent.Set();
                            }
                        );
                 },
                 (ex) =>
                 {
                     Assert.Fail();
-                    manualResetEvent.Set();
-                }
-            );
-            manualResetEvent.WaitOne();
+                    resetEvent.Set();
+                });
+
+            if (!resetEvent.WaitOne(1500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestVariableExpirationTomorrow()
         {
+            var resetEvent = new ManualResetEvent(false);
             var date = DateTime.Now.AddDays(1);
             var lc = new VariLoadContext(date);
             lc.Foo = 1;
@@ -944,202 +947,72 @@ namespace AgFx.Test
 
                     // do another load - SHOULD come from cache.
                     //
-                    DataManager.Current.Load<VariableCacheObject>(lc,
-                           (vco2) =>
-                           {
-                               Assert.IsNotNull(vco2.ExpirationTime);
-                               Assert.AreNotEqual(lc.Foo, vco2.Foo);
-                               Assert.AreEqual(1, vco2.Foo);
+                    DataManager.Current.Load<VariableCacheObject>(lc, (vco2) =>
+                    {
+                        Assert.IsNotNull(vco2.ExpirationTime);
+                        Assert.AreNotEqual(lc.Foo, vco2.Foo);
+                        Assert.AreEqual(1, vco2.Foo);
 
-                               TestComplete();
-
-                           },
-                           (ex2) =>
-                           {
-                               Assert.Fail();
-                               TestComplete();
-
-                           }
-                       );
-
-
+                        resetEvent.Set();
+                    }, (ex2) =>
+                    {
+                        Assert.Fail();
+                        resetEvent.Set();
+                    });
                 },
                 (ex) =>
                 {
                     Assert.Fail();
-                    TestComplete();
+                    resetEvent.Set();
+                });
 
-                }
-            );
-
-
+            if (!resetEvent.WaitOne(1500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestDerivedClassWithInheritedLoader()
         {
+            var resetEvent = new ManualResetEvent(false);
             var id = DateTime.Now.GetHashCode().ToString();
-            var obj = DataManager.Current.Load<TestDerivedNestedLoaderObject>(id,
-                (tdnlo) =>
-                {
-                    Assert.AreEqual(id, tdnlo.StrValue);
-                    TestComplete();
-
-                },
-                (ex) =>
-                {
-                    Assert.Fail();
-                    TestComplete();
-
-                }
-            );
+            var obj = DataManager.Current.Load<TestDerivedNestedLoaderObject>(id, (tdnlo) =>
+            {
+                Assert.AreEqual(id, tdnlo.StrValue);
+                resetEvent.Set();
+            }, (ex) =>
+            {
+                Assert.Fail();
+                resetEvent.Set();
+            });
+            resetEvent.WaitOne();
+            if (!resetEvent.WaitOne(500))
+            {
+                Assert.Fail();
+            }
         }
 
         [TestMethod]
-        [Asynchronous]
         public void TestDerivedLoaderAttribute()
         {
+            var resetEvent = new ManualResetEvent(false);
             string id = DateTime.Now.ToString();
             var obj = DataManager.Current.Load<TestPocoDerived>(id,
                 (vm) =>
                 {
                     Assert.AreEqual(id, vm.Value);
-                    TestComplete();
-
+                    resetEvent.Set();
                 },
                 (ex) =>
                 {
                     Assert.Fail();
-                    TestComplete();
-
+                    resetEvent.Set();
                 });
-        }
-#endif
-        public class TestLoadRequest : LoadRequest
-        {
-
-            string _value;
-
-            public TestLoadRequest(LoadContext context, string value)
-                : base(context)
+            if (!resetEvent.WaitOne(500))
             {
-                _value = value;
+                Assert.Fail();
             }
-
-
-            public override void Execute(Action<LoadRequestResult> result)
-            {
-
-                MemoryStream str = new MemoryStream(UTF8Encoding.UTF8.GetBytes(_value));
-                str.Seek(0, SeekOrigin.Begin);
-                result(new LoadRequestResult(str));
-            }
-        }
-
-        public class TestLoadContext : LoadContext
-        {
-
-            public TestLoadContext(int intCtor)
-                : this(intCtor.ToString())
-            {
-
-            }
-
-            public TestLoadContext(string str)
-                : base(typeof(TestLoadContext).Name + ":" + str)
-            {
-            }
-
-            public int Option { get; set; }
-
-            protected override string GenerateKey()
-            {
-                return string.Format("{0}_{1}", Identity, Option);
-            }
-        }
-
-        public class TestContextObject : ModelItemBase<TestLoadContext>
-        {
-
-            public TestContextObject()
-            {
-
-            }
-
-            public string DeserializedValue { get; set; }
-
-            public class TestContextDataLoader : IDataLoader<TestLoadContext>
-            {
-                public LoadRequest GetLoadRequest(TestLoadContext loadContext, Type objectType)
-                {
-                    return new TestLoadRequest(loadContext, String.Format("{0}.{1}", loadContext.Identity, loadContext.Option));
-                }
-
-                public object Deserialize(TestLoadContext loadContext, Type objectType, Stream stream)
-                {
-
-                    byte[] bytes = new byte[stream.Length];
-                    stream.Read(bytes, 0, bytes.Length);
-
-                    string val = UTF8Encoding.UTF8.GetString(bytes, 0, bytes.Length);
-
-                    var tco = new TestContextObject();
-                    tco.LoadContext = loadContext;
-                    tco.DeserializedValue = val;
-                    return tco;
-
-                }
-            }
-
-        }
-
-        public class TestNestedLoaderObject
-        {
-            public string StrValue { get; set; }
-
-            public class TestNestedLoaderObjectLoader : IDataLoader<LoadContext>
-            {
-                public TestNestedLoaderObjectLoader()
-                {
-
-                }
-                public LoadRequest GetLoadRequest(LoadContext identifier, Type objectType)
-                {
-                    return new NestedLoadRequest(identifier);
-                }
-
-                public object Deserialize(LoadContext identifier, Type objectType, Stream stream)
-                {
-                    StreamReader sr = new StreamReader(stream);
-
-                    var tnlo = (TestNestedLoaderObject)Activator.CreateInstance(objectType);
-
-                    tnlo.StrValue = sr.ReadToEnd();
-
-                    return tnlo;
-
-                }
-
-                private class NestedLoadRequest : LoadRequest
-                {
-                    public NestedLoadRequest(LoadContext id)
-                        : base(id)
-                    {
-                    }
-
-                    public override void Execute(Action<LoadRequestResult> result)
-                    {
-                        MemoryStream ms = new MemoryStream(UTF8Encoding.UTF8.GetBytes(LoadContext.Identity.ToString()));
-                        ms.Seek(0, SeekOrigin.Begin);
-                        result(new LoadRequestResult(ms));
-                    }
-                }
-            }
-        }
-
-        public class TestDerivedNestedLoaderObject : TestNestedLoaderObject
-        {
-        }
+        }        
     }
 }

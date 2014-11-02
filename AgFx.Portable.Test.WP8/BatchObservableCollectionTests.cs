@@ -1,19 +1,13 @@
-﻿#if WINDOWS_PHONE
-using Microsoft.Phone.Testing;
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-#else
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-#endif
+﻿using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Threading;
 using System.Windows;
 
-#if WINDOWS_PHONE
 namespace AgFx.Test
 {
     [TestClass]
-    public class BatchObservableCollectionTests : WorkItemTest
+    public class BatchObservableCollectionTests
     {
         [TestInitialize]
         public void Initialise()
@@ -162,4 +156,3 @@ namespace AgFx.Test
         }
     }
 }
-#endif

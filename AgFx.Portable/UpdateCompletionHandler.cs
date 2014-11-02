@@ -149,14 +149,12 @@ namespace AgFx
                     // if the error isn't handled, throw.
                     if (loadResult.Error != null && !errorHandlerCalled)
                     {
-#if DEBUG
                         Debug.WriteLine("{4}: FAIL loading {0} (ID={1}).  Exception {2} Message={3}",
                             _cacheEntry.ObjectType.Name,
                             _cacheEntry.LoadContext.Identity,
                             loadResult.Error.GetType().Name,
                             loadResult.Error.Message,
                             DateTime.Now);
-#endif
                         if (UnhandledError != null)
                         {
                             UnhandledError(loadResult.Error);

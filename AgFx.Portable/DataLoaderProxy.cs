@@ -38,7 +38,7 @@ namespace AgFx
 
             try
             {
-                return (LoadRequest)mi.Invoke(dataLoader, new object[] { loadContext, objectType });
+                return (LoadRequest)mi.Invoke(dataLoader, new object[] { loadContext, objectType }); ;
             }
             catch (TargetInvocationException t)
             {
