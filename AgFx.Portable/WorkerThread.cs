@@ -1,46 +1,69 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace AgFx
 {
-    public sealed class WorkerThread : IWorkerThread, IDisposable
+    public class WorkerThread : IWorkerThread, IDisposable
     {
-        private const int MaximumConcurrentTasks = 4;
-        private SemaphoreSlim semaphore = new SemaphoreSlim(MaximumConcurrentTasks);
+        Task t;
+        Queue<Action> q = new Queue<Action>();
+        AutoResetEvent e = new AutoResetEvent(false);
 
-        public int CurrentlyExecutingTasks
+        public string _name;
+    
+        public WorkerThread(int sleepyTime, string name)
         {
-            get
+            _name = name;
+            SleepyTime = sleepyTime;
+            t = new Task(WorkerThreadProc);
+            t.Start();
+        }
+
+        private async void WorkerThreadProc()
+        {
+            while (true)
             {
-                return MaximumConcurrentTasks - semaphore.CurrentCount;
+                {
+                    IEnumerable<Action> workItems = null;
+
+                    lock (q)
+                    {
+                        workItems = q.ToArray();
+                        q.Clear();
+                    }
+
+                    foreach (var item in workItems)
+                    {
+                        if (item != null)
+                        {
+                            Task.Run(() =>
+                            {
+                                item();
+                            });
+                            await Task.Delay(SleepyTime);
+                        }
+                    }
+                }
+                e.WaitOne();
             }
         }
 
-        private void ProcessAsync(Action action)
+        public int SleepyTime { get; set; }
+        public void AddWorkItem(Action a)
         {
-            Task.Run(() =>
+            lock (q)
             {
-                semaphore.Wait();
-                try
-                {
-                    Task.Run(action).Wait();
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            });
-        }
-
-        public void AddWorkItem(Action action)
-        {
-            ProcessAsync(action);
+                q.Enqueue(a);
+            }
+            e.Set();
         }
 
         public void Dispose()
         {
-            semaphore.Dispose();
+            e.Dispose();
         }
     }
 }

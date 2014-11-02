@@ -15,9 +15,9 @@ namespace AgFx
     /// </summary>
     public class PriorityQueue
     {
-        static IWorkerThread storageWorker = new WorkerThread();
-        static IWorkerThread networkWorker = new WorkerThread();
-        static IWorkerThread workWorker = new WorkerThread();
+        static IWorkerThread storageWorker = new WorkerThread(10, "Storage Thread");
+        static IWorkerThread networkWorker = new WorkerThread(0, "Network Thread");
+        static IWorkerThread workWorker = new WorkerThread(25, "General thread");
 
         public static bool IsOnUiThread
         {
