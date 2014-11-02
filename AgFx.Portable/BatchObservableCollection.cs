@@ -1,17 +1,13 @@
-﻿
-// (c) Copyright Microsoft Corporation.
+﻿// (c) Copyright Microsoft Corporation.
 // This source is subject to the Apache License, Version 2.0
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
-
 
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
-using System.Windows;
-using System.Threading;
 
 namespace AgFx
 {
@@ -38,9 +34,10 @@ namespace AgFx
                 return _batchItems.Count > 0;
             }
         }
-        
-        // The amount of time to wait between batched adds.
-        //
+
+        /// <summary>
+        /// The amount of time to wait between batched adds. 
+        /// </summary>
         private TimeSpan TimeBetweenBatches
         {
             get;
@@ -50,7 +47,8 @@ namespace AgFx
         /// <summary>
         /// Create a default collection, with batch size 3
         /// </summary>
-        public BatchObservableCollection() : this(3, TimeSpan.FromMilliseconds(DefaultMillisecondsTimeout))
+        public BatchObservableCollection()
+            : this(3, TimeSpan.FromMilliseconds(DefaultMillisecondsTimeout))
         {
 
         }
@@ -59,7 +57,8 @@ namespace AgFx
         /// Create a collection with the specified batch size.
         /// </summary>
         /// <param name="batchSize"></param>
-        public BatchObservableCollection(int batchSize) : this(batchSize, TimeSpan.FromMilliseconds(DefaultMillisecondsTimeout))
+        public BatchObservableCollection(int batchSize)
+            : this(batchSize, TimeSpan.FromMilliseconds(DefaultMillisecondsTimeout))
         {
         }
 
@@ -76,7 +75,7 @@ namespace AgFx
             if (_batchSize > 0)
             {
                 PriorityQueue.AddUiWorkItem(() =>
-                {                    
+                {
                     if (_batchItems.Count > 0)
                     {
                         _timer = new Timer(ProcessBatch, null, 0, TimeBetweenBatches.Milliseconds);
@@ -120,7 +119,7 @@ namespace AgFx
         /// <param name="items"></param>
         public void AddRange(IEnumerable<T> items)
         {
-            bool delay =  _batchSize > 0;
+            bool delay = _batchSize > 0;
             if (delay && items.Count() > _batchSize)
             {
                 foreach (var item in items)
@@ -157,26 +156,26 @@ namespace AgFx
             base.OnPropertyChanged(new PropertyChangedEventArgs("Count"));
         }
 
-       /// <summary>
-       /// Clear the items out of the collection.
-       /// </summary>
+        /// <summary>
+        /// Clear the items out of the collection.
+        /// </summary>
         protected override void ClearItems()
         {
             CancelBatch();
             base.ClearItems();
         }
-        
-       /// <summary>
-       /// insert an item into the collection
-       /// </summary>
-       /// <param name="index"></param>
-       /// <param name="item"></param>
+
+        /// <summary>
+        /// insert an item into the collection
+        /// </summary>
+        /// <param name="index"></param>
+        /// <param name="item"></param>
         protected override void InsertItem(int index, T item)
         {
             if (DelayMode && !_dequeuing)
             {
                 throw new InvalidOperationException("Can't do direct inserts when a pending delayed add exists.");
-            }            
+            }
             base.InsertItem(index, item);
         }
 
@@ -209,7 +208,7 @@ namespace AgFx
 
             CancelBatch();
 
-            
+
             var sortedExisting = this; // we have to assume the list is currently sorted by the specified comparer.
 
             // sort the newArray
@@ -221,25 +220,29 @@ namespace AgFx
             // Now walk each item in the new array and compare it against the current
             // items in the collection.
             //
-            foreach(var newItem in sortedNew) {
-            
+            foreach (var newItem in sortedNew)
+            {
+
 
                 T existingItem = default(T);
-                
+
                 // if we're past the end of the old list,
                 // just start adding.
                 //
-                if (currentPos < Count) {
+                if (currentPos < Count)
+                {
                     existingItem = this[currentPos];
                 }
-                else{
+                else
+                {
                     Add(newItem);
                     continue;
                 }
 
                 int compareResult = compare(newItem, existingItem);
 
-                if (compareResult == 0) {
+                if (compareResult == 0)
+                {
 
                     // we found the match, so just replace the item
                     // or do nothing.
@@ -257,7 +260,7 @@ namespace AgFx
                                 break;
                             default:
                                 break;
-                        }                                                
+                        }
                     }
                     else
                     {
@@ -265,29 +268,32 @@ namespace AgFx
                         // something compared as equal, but it's a different object
                         // so insert the new one before the existing one.
                         //
-                        this.Insert(currentPos, newItem);                        
+                        this.Insert(currentPos, newItem);
                     }
                     currentPos++;
-                    
+
                 }
-                else if (compareResult < 0) {
+                else if (compareResult < 0)
+                {
                     // the new item comes before the existing item, so add it.
                     //
                     this.Insert(currentPos, newItem);
                     currentPos++;
                 }
-                else if (compareResult > 0) {
+                else if (compareResult > 0)
+                {
                     // the new item should come after this item, 
                     // so just replace the current item with our new item.
                     //
                     this[currentPos] = newItem;
                     currentPos++;
-                }                
+                }
             }
 
             // remove any that are left in the old list.
             //
-            for (int i = this.Count - 1; i >= currentPos; i-- ) {
+            for (int i = this.Count - 1; i >= currentPos; i--)
+            {
                 this.RemoveAt(i);
             }
         }

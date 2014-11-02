@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace AgFx
 {
-    public class WorkerThread : IWorkerThread, IDisposable
+    public sealed class WorkerThread : IWorkerThread, IDisposable
     {
         private const int MaximumConcurrentTasks = 4;
         private SemaphoreSlim semaphore = new SemaphoreSlim(MaximumConcurrentTasks);

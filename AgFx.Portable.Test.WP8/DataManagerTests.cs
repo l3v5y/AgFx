@@ -55,10 +55,8 @@ namespace AgFx.Test
                     resetEvent.Set();
                 }
             );
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -114,10 +112,8 @@ namespace AgFx.Test
                      Assert.Fail(ex.Message);
                      resetEvent.Set();
                  });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -150,10 +146,8 @@ namespace AgFx.Test
                      Assert.Fail(ex.Message);
                      resetEvent.Set();
                  });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -175,71 +169,60 @@ namespace AgFx.Test
         private void TestInvalidateCore(LoadContext lc, string time)
         {
             var resetEvent = new ManualResetEvent(false);
-            DataManager.Current.Load<ShortCacheObject>(lc,
-                (sco) =>
+            DataManager.Current.Load<ShortCacheObject>(lc, (sco) =>
+            {
+                // verify we got the right thing
+                //
+                Assert.AreEqual(time, sco.StringProp);
+
+                // load again to verify it's not going to change
+                DataManager.Current.Load<ShortCacheObject>(lc, (sco2) =>
                 {
                     // verify we got the right thing
                     //
+                    Assert.AreEqual(time, sco2.StringProp);
+
+                    // invalidate it
+                    //
+                    DataManager.Current.Invalidate<ShortCacheObject>(lc);
+
+                    Thread.Sleep(250);
+
                     Assert.AreEqual(time, sco.StringProp);
 
-                    // load again to verify it's not going to change
-                    DataManager.Current.Load<ShortCacheObject>(lc,
-                        (sco2) =>
-                        {
-                            // verify we got the right thing
-                            //
-                            Assert.AreEqual(time, sco2.StringProp);
+                    if (time == ShortCacheObject.DefaultStringValue)
+                    {
+                        ShortCacheObject.DefaultStringValue = "DefaultString";
+                    }
 
-                            // invalidate it
-                            //
-                            DataManager.Current.Invalidate<ShortCacheObject>(lc);
+                    // load again to verify it's changed.
+                    DataManager.Current.Load<ShortCacheObject>(lc, (sco3) =>
+                    {
+                        // verify we got the right thing
+                        //
+                        Assert.AreNotEqual(time, sco3.StringProp);
 
-                            Thread.Sleep(250);
-
-                            Assert.AreEqual(time, sco.StringProp);
-
-                            if (time == ShortCacheObject.DefaultStringValue)
-                            {
-                                ShortCacheObject.DefaultStringValue = "DefaultString";
-                            }
-
-                            // load again to verify it's changed.
-                            DataManager.Current.Load<ShortCacheObject>(lc,
-                                (sco3) =>
-                                {
-                                    // verify we got the right thing
-                                    //
-                                    Assert.AreNotEqual(time, sco3.StringProp);
-
-                                    ShortCacheObject.DefaultStringValue = "DefaultString";
-                                    resetEvent.Set();
-                                },
-                                (ex) =>
-                                {
-                                    Assert.Fail(ex.ToString());
-                                    ShortCacheObject.DefaultStringValue = "DefaultString";
-                                    resetEvent.Set();
-                                });
-
-                        },
-                        (ex) =>
-                        {
-                            Assert.Fail(ex.ToString());
-                            ShortCacheObject.DefaultStringValue = "DefaultString";
-                            resetEvent.Set();
-                        });
-
-                },
-                (ex) =>
+                        ShortCacheObject.DefaultStringValue = "DefaultString";
+                        resetEvent.Set();
+                    }, (ex) =>
+                    {
+                        Assert.Fail(ex.ToString());
+                        ShortCacheObject.DefaultStringValue = "DefaultString";
+                        resetEvent.Set();
+                    });
+                }, (ex) =>
                 {
                     Assert.Fail(ex.ToString());
+                    ShortCacheObject.DefaultStringValue = "DefaultString";
                     resetEvent.Set();
-                }
-                );
-            if (!resetEvent.WaitOne(500))
+                });
+            }, (ex) =>
             {
-                Assert.Fail();
-            }
+                Assert.Fail(ex.ToString());
+                resetEvent.Set();
+            });
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -250,8 +233,7 @@ namespace AgFx.Test
             var time = DateTime.Now.ToString();
 
             ShortCacheObject.DefaultStringValue = DateTime.Now.ToString();
-
-
+            
             TestInvalidateCore(lc, ShortCacheObject.DefaultStringValue);
         }
 
@@ -299,10 +281,8 @@ namespace AgFx.Test
                              resetEvent.Set();
                          });
                  });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -328,10 +308,8 @@ namespace AgFx.Test
                 Assert.Fail(ex.Message);
                 resetEvent.Set();
             });
-            if (!resetEvent.WaitOne(1500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -353,10 +331,8 @@ namespace AgFx.Test
                    ShortCacheObject.SCOLoadRequest.Error = null;
                    resetEvent.Set();
                });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -381,73 +357,64 @@ namespace AgFx.Test
 
             DataManager.Current.UnhandledError += handler;
 
-            DataManager.Current.Load<ShortCacheObject>("LoadEror",
-               (v) =>
-               {
-                   Assert.Fail("This should have failed");
-                   resetEvent.Set();
-               },
-               null);
-
-            if (!resetEvent.WaitOne(500))
+            DataManager.Current.Load<ShortCacheObject>("LoadEror", (v) =>
             {
-                Assert.Fail();
-            }
+                Assert.Fail("This should have failed");
+                resetEvent.Set();
+            }, null);
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
         public void TestUpdating()
         {
             var resetEvent = new ManualResetEvent(false);
-            DataManager.Current.Load<ShortCacheObject>("Updating",
-                (s) =>
+            DataManager.Current.Load<ShortCacheObject>("Updating", (s) =>
+            {
+                Assert.IsFalse(s.IsUpdating);
+
+                PropertyChangedEventHandler h = null;
+
+                bool gotUpdatingTrue = false;
+                bool gotUpdatingFalse = false;
+
+                h = (sender, prop) =>
                 {
-                    Assert.IsFalse(s.IsUpdating);
-
-                    PropertyChangedEventHandler h = null;
-
-                    bool gotUpdatingTrue = false;
-                    bool gotUpdatingFalse = false;
-
-                    h = (sender, prop) =>
+                    if (prop.PropertyName == "IsUpdating")
                     {
-                        if (prop.PropertyName == "IsUpdating")
+                        if (!gotUpdatingTrue)
                         {
-                            if (!gotUpdatingTrue)
-                            {
-                                Assert.IsTrue(s.IsUpdating);
-                                gotUpdatingTrue = true;
-                            }
-                            else if (!gotUpdatingFalse)
-                            {
-                                Assert.IsFalse(s.IsUpdating);
-                                gotUpdatingFalse = true;
-                                s.PropertyChanged -= h;
-                            }
-                            else
-                            {
-                                Assert.Fail();
-                            }
+                            Assert.IsTrue(s.IsUpdating);
+                            gotUpdatingTrue = true;
                         }
-                    };
-
-                    s.PropertyChanged += h;
-
-                    DataManager.Current.Refresh<ShortCacheObject>("Updating", (s2) =>
-                    {
-                        Assert.IsFalse(s.IsUpdating);
-                        if (!gotUpdatingTrue || !gotUpdatingFalse)
+                        else if (!gotUpdatingFalse)
+                        {
+                            Assert.IsFalse(s.IsUpdating);
+                            gotUpdatingFalse = true;
+                            s.PropertyChanged -= h;
+                        }
+                        else
                         {
                             Assert.Fail();
                         }
-                        resetEvent.Set();
-                    }, null);
-                },
-                null);
-            if (!resetEvent.WaitOne(1000))
-            {
-                Assert.Fail();
-            }
+                    }
+                };
+
+                s.PropertyChanged += h;
+
+                DataManager.Current.Refresh<ShortCacheObject>("Updating", (s2) =>
+                {
+                    Assert.IsFalse(s.IsUpdating);
+                    if (!gotUpdatingTrue || !gotUpdatingFalse)
+                    {
+                        Assert.Fail();
+                    }
+                    resetEvent.Set();
+                }, null);
+            }, null);
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -472,10 +439,8 @@ namespace AgFx.Test
                     Assert.AreEqual(msg, ex.Message);
                     resetEvent.Set();
                 });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -510,10 +475,8 @@ namespace AgFx.Test
                 },
                 null
             );
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -547,10 +510,8 @@ namespace AgFx.Test
                     Assert.Fail();
                     resetEvent.Set();
                 });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -558,6 +519,7 @@ namespace AgFx.Test
         {
             var resetEvent = new ManualResetEvent(false);
             var dval = DateTime.Now.ToString();
+
             DataManager.Current.Load<TestPoco>(dval, (tp) =>
             {
                 Assert.AreEqual(dval, tp.Value);
@@ -566,12 +528,9 @@ namespace AgFx.Test
             {
                 Assert.Fail();
                 resetEvent.Set();
-            }
-            );
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+            });
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -591,10 +550,8 @@ namespace AgFx.Test
                 Assert.IsNull(item);
                 resetEvent.Set();
             });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -619,10 +576,8 @@ namespace AgFx.Test
                     Assert.Fail();
                     resetEvent.Set();
                 });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne();
         }
 
         [DataLoader(typeof(TestDataLoader))]
@@ -695,8 +650,7 @@ namespace AgFx.Test
 
             ShortCacheObject.DefaultStringValue = strValue;
 
-            DataManager.Current.Load<NoCacheObject>("nco",
-            (v1) =>
+            DataManager.Current.Load<NoCacheObject>("nco", (v1) =>
             {
                 Assert.AreEqual(strValue, v1.StringProp);
 
@@ -715,18 +669,13 @@ namespace AgFx.Test
                         Assert.Fail();
                         resetEvent.Set();
                     });
-
-            },
-            (ex) =>
+            }, (ex) =>
             {
                 Assert.Fail();
                 resetEvent.Set();
             });
 
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -770,10 +719,7 @@ namespace AgFx.Test
                 resetEvent.Set();
             });
 
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+            resetEvent.WaitOne();
         }
 
 
@@ -789,10 +735,8 @@ namespace AgFx.Test
                     resetEvent.Set();
                 },
                 null);
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+
+            resetEvent.WaitOne(); 
         }
 
         [TestMethod]
@@ -805,55 +749,42 @@ namespace AgFx.Test
             sco.IntProp = propValue;
             Assert.AreNotEqual(propValue, ShortCacheObject.DefaultIntValue);
 
-            DataManager.Current.RegisterProxy<ShortCacheObject>(sco, true,
-                (obj) =>
-                {
-                    Assert.AreNotEqual(propValue, obj.IntProp);
-                    Assert.AreEqual(ShortCacheObject.DefaultIntValue, obj.IntProp);
-                    Assert.AreEqual(ShortCacheObject.DefaultIntValue, sco.IntProp);
-                    resetEvent.Set();
-                },
-                false);
-
-            if (!resetEvent.WaitOne(500))
+            DataManager.Current.RegisterProxy<ShortCacheObject>(sco, true, (obj) =>
             {
-                Assert.Fail();
-            }
+                Assert.AreNotEqual(propValue, obj.IntProp);
+                Assert.AreEqual(ShortCacheObject.DefaultIntValue, obj.IntProp);
+                Assert.AreEqual(ShortCacheObject.DefaultIntValue, sco.IntProp);
+                resetEvent.Set();
+            }, false);
+
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
         public void TestUnusedObjectGC()
         {
             var resetEvent = new ManualResetEvent(false);
-            DataManager.Current.Load<TestPoco>("GC",
-                (tp2) =>
+            DataManager.Current.Load<TestPoco>("GC", (tp2) =>
+            {
+                var entry = DataManager.Current.Get<TestPoco>("GC");
+
+                PriorityQueue.AddUiWorkItem(() =>
                 {
-
-                    var entry = DataManager.Current.Get<TestPoco>("GC");
-
-                    PriorityQueue.AddUiWorkItem(
-
-                        () =>
-                        {
-                            GC.Collect();
-                            Assert.IsTrue(entry.HasBeenGCd);
-                            resetEvent.Set();
-                        });
-
-                    Assert.IsFalse(entry.HasBeenGCd);
-                    tp2 = null;
-                },
-                (ex) =>
-                {
-                    Assert.Fail();
+                    GC.Collect();
+                    Assert.IsTrue(entry.HasBeenGCd);
                     resetEvent.Set();
                 });
-            if (!resetEvent.WaitOne(500))
+                Assert.IsFalse(entry.HasBeenGCd);
+                tp2 = null;
+            }, (ex) =>
             {
                 Assert.Fail();
-            }
+                resetEvent.Set();
+            });
+
+            resetEvent.WaitOne();
         }
-        
+
         [TestMethod]
         public void TestVariableExpirationDefault()
         {
@@ -893,11 +824,7 @@ namespace AgFx.Test
                     Assert.Fail();
                     resetEvent.Set();
                 });
-
-            if (!resetEvent.WaitOne(1500))
-            {
-                Assert.Fail();
-            }
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -938,11 +865,8 @@ namespace AgFx.Test
                     Assert.Fail();
                     resetEvent.Set();
                 });
-
-            if (!resetEvent.WaitOne(1500))
-            {
-                Assert.Fail();
-            }
+            
+            resetEvent.WaitOne();
         }
 
         [TestMethod]
@@ -959,11 +883,8 @@ namespace AgFx.Test
                 Assert.Fail();
                 resetEvent.Set();
             });
+
             resetEvent.WaitOne();
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
         }
 
         [TestMethod]
@@ -982,10 +903,7 @@ namespace AgFx.Test
                     Assert.Fail();
                     resetEvent.Set();
                 });
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+            resetEvent.WaitOne();
         }        
     }
 }

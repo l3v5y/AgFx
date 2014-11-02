@@ -3,14 +3,12 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-
-namespace AgFx {
-
+namespace AgFx
+{
     /// <summary>
     /// Convenience class for dataloaders based of plain LoadContext.
     /// </summary>
-    public abstract class DefaultDataLoader : DataLoaderBase<LoadContext> {
-
-
+    public abstract class DefaultDataLoader : DataLoaderBase<LoadContext>
+    {
     }
 }

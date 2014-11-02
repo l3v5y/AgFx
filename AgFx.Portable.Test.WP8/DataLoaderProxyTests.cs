@@ -16,7 +16,6 @@ namespace AgFx.Test
         }
 
         [TestMethod]
-        [Ignore]
         public void LoadRequestCanExecute()
         {
             var resetEvent = new ManualResetEvent(false);
@@ -32,10 +31,7 @@ namespace AgFx.Test
                 resetEvent.Set();
             });
 
-            if (!resetEvent.WaitOne(500))
-            {
-                Assert.Fail();
-            }
+            resetEvent.WaitOne();
         }
     }
 }
