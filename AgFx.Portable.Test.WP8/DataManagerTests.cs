@@ -558,17 +558,15 @@ namespace AgFx.Test
         {
             var resetEvent = new ManualResetEvent(false);
             var dval = DateTime.Now.ToString();
-            DataManager.Current.Load<TestPoco>(dval,
-                 (tp) =>
-                 {
-                     Assert.AreEqual(dval, tp.Value);
-                     resetEvent.Set();
-                 },
-                 (ex) =>
-                 {
-                     Assert.Fail();
-                     resetEvent.Set();
-                 }
+            DataManager.Current.Load<TestPoco>(dval, (tp) =>
+            {
+                Assert.AreEqual(dval, tp.Value);
+                resetEvent.Set();
+            }, (ex) =>
+            {
+                Assert.Fail();
+                resetEvent.Set();
+            }
             );
             if (!resetEvent.WaitOne(500))
             {
