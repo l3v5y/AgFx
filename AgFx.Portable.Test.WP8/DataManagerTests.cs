@@ -226,6 +226,23 @@ namespace AgFx.Test
         }
 
         [TestMethod]
+        public void TestAutoContextCreation()
+        {
+            var resetEvent = new ManualResetEvent(false);
+            // verify auto creation of context.
+            var obj = DataManager.Current.Load<TestContextObject>(4321, (success) =>
+            {
+                Assert.IsTrue(success.DeserializedValue.StartsWith(typeof(TestLoadContext).Name));
+                resetEvent.Set();
+            }, (error) =>
+            {
+                Assert.Fail(error.Message);
+                resetEvent.Set();
+            });
+            resetEvent.WaitOne();
+        }
+
+        [TestMethod]
         public void TestInvalidateFromLive()
         {
             LoadContext lc = new LoadContext("InvalidateFromLive");

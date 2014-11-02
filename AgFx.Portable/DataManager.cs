@@ -165,7 +165,7 @@ namespace AgFx
         /// <param name="id"></param>
         public void Clear<T>(object id) where T : new()
         {
-            Clear<T>(_loadContextCreator.AutoCreateLoadContext<T>(id));
+            Clear<T>(_loadContextCreator.CreateLoadContext<T>(id));
         }
 
         /// <summary>
@@ -209,7 +209,7 @@ namespace AgFx
         /// <param name="id"></param>
         public void Invalidate<T>(object id) where T : new()
         {
-            var lc = _loadContextCreator.AutoCreateLoadContext<T>(id);
+            var lc = _loadContextCreator.CreateLoadContext<T>(id);
             Invalidate<T>(lc);
         }
 
@@ -235,7 +235,7 @@ namespace AgFx
         /// <returns></returns>
         public T Load<T>(object id) where T : new()
         {
-            var lc = _loadContextCreator.AutoCreateLoadContext<T>(id);
+            var lc = _loadContextCreator.CreateLoadContext<T>(id);
             return Load<T>(lc, null, null);
         }
 
@@ -285,7 +285,7 @@ namespace AgFx
         /// <returns>The instance of the item to use/databind to.  As the loads complete, the properties of this instance will be updated.</returns>
         public T Load<T>(object id, Action<T> completed, Action<Exception> error) where T : new()
         {
-            return Load<T>(_loadContextCreator.AutoCreateLoadContext<T>(id), completed, error);
+            return Load<T>(_loadContextCreator.CreateLoadContext<T>(id), completed, error);
         }
 
         /// <summary>
@@ -310,7 +310,7 @@ namespace AgFx
         /// <returns>The cached value, or a default instance if one is not available.</returns>
         public T LoadFromCache<T>(object id) where T : new()
         {
-            var lc = _loadContextCreator.AutoCreateLoadContext<T>(id);
+            var lc = _loadContextCreator.CreateLoadContext<T>(id);
             return LoadFromCache<T>(lc);
         }
 
@@ -422,7 +422,7 @@ namespace AgFx
         /// <returns>The instance of the item to use/databind to.  As the loads complete, the properties of this instance will be updated.</returns>
         public T Refresh<T>(object id, Action<T> completed, Action<Exception> error) where T : new()
         {
-            return Refresh<T>(_loadContextCreator.AutoCreateLoadContext<T>(id), completed, error);
+            return Refresh<T>(_loadContextCreator.CreateLoadContext<T>(id), completed, error);
         }
 
         /// <summary>
@@ -647,8 +647,7 @@ namespace AgFx
         /// </summary>
         private CacheEntry Get<T>(object identity, Action<T> completed, Action<Exception> error, bool resetCallbacks) where T : new()
         {
-
-            LoadContext loadContext = _loadContextCreator.AutoCreateLoadContext<T>(identity);
+            LoadContext loadContext = _loadContextCreator.CreateLoadContext<T>(identity);
 
             return Get<T>(loadContext, completed, error, resetCallbacks);
         }

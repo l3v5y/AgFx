@@ -9,7 +9,7 @@ namespace AgFx
     {
         private readonly Dictionary<Type, ConstructorInfo> _loadContextTypes = new Dictionary<Type, ConstructorInfo>();
 
-        public LoadContext AutoCreateLoadContext<T>(object value)
+        public LoadContext CreateLoadContext<T>(object value)
         {
             if (value is LoadContext)
             {
@@ -27,23 +27,37 @@ namespace AgFx
 
             if (!valueExists)
             {
+
                 bool hasLoadContextProperty = false;
 
-                var loadContextProps = from pi in typeof(T).GetRuntimeProperties()
+                /*
+                var loadContextProps = from pi in typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public)
                                        where typeof(LoadContext).IsAssignableFrom(pi.PropertyType) && pi.Name == "LoadContext"
+                                       select pi;
+                */
+                // http://dotnet.dzone.com/articles/reflection-winrt
+                var loadContextProps = from pi in typeof(T).GetRuntimeProperties()
+                                       where typeof(LoadContext).GetTypeInfo().IsAssignableFrom(pi.PropertyType.GetTypeInfo()) && pi.Name == "LoadContext"
                                        select pi;
 
                 foreach (var lcProp in loadContextProps)
                 {
                     hasLoadContextProperty = true;
                     Type lcType = lcProp.PropertyType;
+                    //Type lcType = lcProp.GetType(); 
 
                     // check the type's ctor.
-                    //
-                    var ctors = from c in lcType.GetTypeInfo().DeclaredConstructors
+                    /*
+                    var ctors = from c in lcType.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
                                 where c.GetParameters() != null &&
                                       c.GetParameters().Length == 1 &&
                                       c.GetParameters()[0].ParameterType.IsInstanceOfType(value)
+                                select c;
+                    */
+                    var ctors = from c in lcType.GetTypeInfo().DeclaredConstructors
+                                where c.GetParameters() != null &&
+                                      c.GetParameters().Length == 1 &&
+                                      c.GetParameters()[0].ParameterType.GetTypeInfo().IsAssignableFrom(value.GetType().GetTypeInfo())
                                 select c;
 
                     ci = ctors.FirstOrDefault();

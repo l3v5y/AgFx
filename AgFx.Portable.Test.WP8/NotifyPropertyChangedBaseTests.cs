@@ -160,12 +160,10 @@ namespace AgFx.Test
 
             tc.PropertyChanged += (s, a) =>
             {
-
                 if (a.PropertyName == "MultiDependentProp")
                 {
                     notifyCount++;
                 }
-
             };
 
             tc.TestProp = "changed";

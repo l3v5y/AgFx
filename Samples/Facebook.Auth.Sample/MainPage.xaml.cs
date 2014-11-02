@@ -11,8 +11,8 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using Microsoft.Phone.Controls;
 using AgFx;
-using AgFx.Controls.Authorization;
 using System.IO;
+using AgFx.Authorisation;
 
 namespace Facebook.Auth.Sample {
     public partial class MainPage : PhoneApplicationPage {

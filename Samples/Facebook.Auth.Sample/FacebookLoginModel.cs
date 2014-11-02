@@ -8,10 +8,10 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
-using AgFx.Controls.Authorization;
 using AgFx;
 using System.IO.IsolatedStorage;
 using System.IO;
+using AgFx.Authorisation;
 
 namespace Facebook.Auth.Sample {
 

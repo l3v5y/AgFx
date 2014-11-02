@@ -14,8 +14,8 @@ using Microsoft.Phone.Controls;
 using Microsoft.Phone.Shell;
 using AgFx.Controls;
 using System.Windows.Data;
-using AgFx.Converters;
 using AgFx;
+using AgFx.Converters;
 
 namespace Facebook.Auth.Sample {
     public partial class App : Application {
@@ -29,6 +29,7 @@ namespace Facebook.Auth.Sample {
         /// Constructor for the Application object.
         /// </summary>
         public App() {
+            PriorityQueue.Initialize(new Dispatcher());
             // Global handler for uncaught exceptions. 
             UnhandledException += Application_UnhandledException;
 

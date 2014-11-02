@@ -59,11 +59,12 @@ namespace AgFx
 
         public override IEnumerable<CacheItemInfo> GetItems()
         {
-            var fileNamesTask = GetFileNamesRecursive(CacheDirectoryPrefix);
-            fileNamesTask.Wait();
-            var files = fileNamesTask.Result;
-            var items = from f in files
-                        select new FileItem(f).Item;
+            var items = new List<CacheItemInfo>();
+            Task.Run(async () =>
+            {
+                var allFileNames =await GetFileNamesRecursive(CacheDirectoryPrefix);
+                items = allFileNames.Select(f => new FileItem(f).Item).ToList();
+            }).Wait();
             return items;
         }
 

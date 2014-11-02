@@ -16,19 +16,22 @@ namespace AgFx.Test
         }
 
         [TestMethod]
+        //[Ignore]
         public void LoadRequestCanExecute()
         {
             var resetEvent = new ManualResetEvent(false);
+
             var mockDataLoader = new ShortCacheObject.SCODataLoader();
             var loadRequest = DataLoaderProxy.GetLoadRequest(mockDataLoader, new LoadContext("mock"), typeof(ShortCacheObject));
             Assert.IsInstanceOfType(loadRequest, typeof(ShortCacheObject.SCOLoadRequest));
 
             loadRequest.Execute((result) =>
             {
+                resetEvent.Set();
+
                 Assert.IsNotNull(result);
                 Assert.IsNull(result.Error);
                 Assert.Equals(19, result.Stream.Length);
-                resetEvent.Set();
             });
 
             resetEvent.WaitOne();

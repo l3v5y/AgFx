@@ -8,7 +8,6 @@ using System.Windows;
 using System.Windows.Navigation;
 using Microsoft.Phone.Controls;
 using Microsoft.Phone.Shell;
-using AgFx.Controls;
 using System.Windows.Controls;
 using System.Windows.Data;
 using AgFx;
@@ -25,7 +24,7 @@ namespace NWSWeather.Sample
         /// Provides easy access to the root frame of the Phone Application.
         /// </summary>
         /// <returns>The root frame of the Phone Application.</returns>
-        public PhoneApplicationFrameEx RootFrame { get; private set; }
+        public PhoneApplicationFrame RootFrame { get; private set; }
 
         /// <summary>
         /// Constructor for the Application object.
@@ -34,6 +33,8 @@ namespace NWSWeather.Sample
         {
             // Global handler for uncaught exceptions. 
             UnhandledException += Application_UnhandledException;
+
+            PriorityQueue.Initialize(new Dispatcher());
 
             // Show graphics profiling information while debugging.
             if (System.Diagnostics.Debugger.IsAttached)
@@ -55,10 +56,9 @@ namespace NWSWeather.Sample
             // Phone-specific initialization
             InitializePhoneApplication();
 
+            // TODO: Put progress bar on the root frame
             ProgressBar pb = new ProgressBar();
             pb.Height = 20;
-            
-            RootFrame.HeaderContent = pb;
 
             Binding pbBinding = new Binding("IsLoading");
             pbBinding.Source = DataManager.Current;
@@ -157,7 +157,7 @@ namespace NWSWeather.Sample
 
             // Create the frame but don't set it as RootVisual yet; this allows the splash
             // screen to remain active until the application is ready to render.
-            RootFrame = new PhoneApplicationFrameEx();
+            RootFrame = new PhoneApplicationFrame();
             RootFrame.Navigated += CompleteInitializePhoneApplication;
 
             // Handle navigation failures

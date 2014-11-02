@@ -108,6 +108,7 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Dispatcher.cs" />
     <Compile Include="FacebookLoginLoadContext.cs" />
     <Compile Include="FacebookLoginModel.cs" />
     <Compile Include="FacebookLoginView.xaml.cs">
@@ -118,6 +119,8 @@
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
+    <Compile Include="NotConverter.cs" />
+    <Compile Include="PhoneApplicationFrameEx.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -156,16 +159,6 @@
     <Content Include="SplashScreenImage.jpg" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\AgFx.Controls\AgFx.Controls.Phone.csproj">
-      <Project>{1DA986E9-0187-4A22-881D-1AFC93A65294}</Project>
-      <Name>AgFx.Controls.Phone</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\AgFx\AgFx.csproj">
-      <Project>{3ED37B15-A664-4E31-ABD3-CD3522B35E27}</Project>
-      <Name>AgFx</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
       <Visible>False</Visible>
       <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
@@ -176,6 +169,12 @@
       <ProductName>.NET Framework 3.5 SP1</ProductName>
       <Install>false</Install>
     </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\AgFx.Portable\AgFx.Portable.csproj">
+      <Project>{d7bd5901-3f1d-4113-8036-d512982328d6}</Project>
+      <Name>AgFx.Portable</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\$(TargetFrameworkIdentifier)\$(TargetFrameworkVersion)\Microsoft.$(TargetFrameworkIdentifier).$(TargetFrameworkVersion).Overrides.targets" />
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\$(TargetFrameworkIdentifier)\$(TargetFrameworkVersion)\Microsoft.$(TargetFrameworkIdentifier).CSharp.targets" />
