@@ -74,6 +74,7 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
+    <Compile Include="AutoLoadContextCreatorTests.cs" />
     <Compile Include="BatchObservableCollectionTests.cs" />
     <Compile Include="DataLoaderProxyTests.cs" />
     <Compile Include="DataManagerTests.cs" />

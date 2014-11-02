@@ -317,20 +317,18 @@ namespace AgFx.Test
             var oldTime = ShortCacheObject.SCOLoadRequest.LoadTimeMs;
             ShortCacheObject.SCOLoadRequest.LoadTimeMs = 1000;
 
-            DataManager.Current.Load<ShortCacheObject>("ExpiredItem",
-                (v) =>
-                {
-                    ShortCacheObject.SCOLoadRequest.LoadTimeMs = oldTime;
-                    Assert.IsNotNull(v);
-                    Assert.AreEqual("ExpiredItemValue", v.StringProp);
-                    resetEvent.Set();
-                },
-                (ex) =>
-                {
-                    Assert.Fail(ex.Message);
-                    resetEvent.Set();
-                });
-            if (!resetEvent.WaitOne(500))
+            DataManager.Current.Load<ShortCacheObject>("ExpiredItem", (v) =>
+            {
+                ShortCacheObject.SCOLoadRequest.LoadTimeMs = oldTime;
+                Assert.IsNotNull(v);
+                Assert.AreEqual("ExpiredItemValue", v.StringProp);
+                resetEvent.Set();
+            }, (ex) =>
+            {
+                Assert.Fail(ex.Message);
+                resetEvent.Set();
+            });
+            if (!resetEvent.WaitOne(1500))
             {
                 Assert.Fail();
             }
@@ -857,30 +855,7 @@ namespace AgFx.Test
                 Assert.Fail();
             }
         }
-
-        [TestMethod]
-        [Ignore]
-        public void TestAutoContextCreation()
-        {
-            var resetEvent = new ManualResetEvent(false);
-            // verify auto creation of context.
-            var obj = DataManager.Current.Load<TestContextObject>(4321,
-                (success) =>
-                {
-                    Assert.IsTrue(success.DeserializedValue.StartsWith(typeof(TestLoadContext).Name));
-                    resetEvent.Set();
-                },
-                (error) =>
-                {
-                    Assert.Fail(error.Message);
-                    resetEvent.Set();
-                });
-            if (!resetEvent.WaitOne(1000))
-            {
-                Assert.Fail();
-            }
-        }
-
+        
         [TestMethod]
         public void TestVariableExpirationDefault()
         {

@@ -631,7 +631,6 @@ namespace AgFx
                         where p.ProxyReference != null && p.ProxyReference.Target == value
                         select p;
 
-
             foreach (var p in proxy)
             {
                 RemoveProxy(p);
@@ -656,7 +655,6 @@ namespace AgFx
 
         private CacheEntry Get<T>(LoadContext loadContext, Action<T> completed, Action<Exception> error, bool resetCallbacks) where T : new()
         {
-
             if (loadContext == null)
             {
                 throw new ArgumentNullException("LoadContext required.");
@@ -751,28 +749,24 @@ namespace AgFx
                 // fire off the load.
                 //
                 IsLoading = true;
-                request.Execute(
-                    (result) =>
+                request.Execute((result) =>
+                {
+                    if (result == null)
                     {
-                        if (result == null)
-                        {
-                            throw new ArgumentNullException("result", "Execute must return a LoadRequestResult value.");
-                        }
-                        if (result.Error == null)
-                        {
-                            lvl.OnLoadSuccess(result.Stream);
-                        }
-                        else
-                        {
-                            lvl.OnLoadFail(new LoadRequestFailedException(lvl.CacheEntry.ObjectType, value.LoadContext, result.Error));
-                        }
-                        IsLoading = false;
+                        throw new ArgumentNullException("result", "Execute must return a LoadRequestResult value.");
                     }
-               );
+                    if (result.Error == null)
+                    {
+                        lvl.OnLoadSuccess(result.Stream);
+                    }
+                    else
+                    {
+                        lvl.OnLoadFail(new LoadRequestFailedException(lvl.CacheEntry.ObjectType, value.LoadContext, result.Error));
+                    }
+                    IsLoading = false;
+                });
                 return true;
-            };
-
-
+            };         
 
             // how to deserialize.
             value.DeserializeAction = (id, data, isOptimized) =>
@@ -785,7 +779,6 @@ namespace AgFx
 
                 if (isOptimized)
                 {
-
                     var idl = (IDataOptimizer)loader;
 
                     if (idl == null)
@@ -900,7 +893,6 @@ namespace AgFx
             }
             else
             {
-
                 // GetNestedTypes returns the nested types defined on the current
                 // type only, so it will not get loaders defined on super classes.
                 // So we just walk through the types until we find one or hit System.Object.
