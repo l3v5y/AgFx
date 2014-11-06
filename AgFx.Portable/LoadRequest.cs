@@ -4,6 +4,7 @@
 // All other rights reserved.
 using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace AgFx
 {
@@ -37,6 +38,6 @@ namespace AgFx
         /// a value for LoadRequestResult.
         /// </summary>
         /// <param name="result"></param>
-        public abstract void Execute(Action<LoadRequestResult> result);
+        public abstract Task<LoadRequestResult> Execute();
     }
 }

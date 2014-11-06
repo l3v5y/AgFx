@@ -3,13 +3,10 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-
-
 using System;
 
 namespace AgFx
 {
-
     /// <summary>
     /// Represents an entry in the Cache
     /// </summary>
@@ -34,7 +31,6 @@ namespace AgFx
         /// Is the Entry optimized data?
         /// </summary>
         public bool IsOptimized { get; set; }
-
 
         /// <summary>
         /// Ctor that takes the unique key
@@ -67,7 +63,10 @@ namespace AgFx
         {
             var other = (CacheItemInfo)obj;
 
-            return other.UniqueName == UniqueName && other.UpdatedTime == UpdatedTime && other.ExpirationTime == ExpirationTime && other.IsOptimized == IsOptimized;
+            return other.UniqueName == UniqueName
+                && other.UpdatedTime == UpdatedTime
+                && other.ExpirationTime == ExpirationTime
+                && other.IsOptimized == IsOptimized;
         }
 
         /// <summary>

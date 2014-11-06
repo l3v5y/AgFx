@@ -10,9 +10,9 @@ using System.Linq;
 namespace AgFx
 {
     /// <summary>
-    /// Class responsible for all result hanlders. Allows to have multiply subscribers to the load operation results
+    /// Class responsible for all result handlers. Allows to have multiple subscribers to the load operation results.
     /// </summary>
-    internal class UpdateCompletionHandler
+    public class UpdateCompletionHandler
     {
         /// <summary>
         /// Lock object to protect a list of subscribers
@@ -32,7 +32,7 @@ namespace AgFx
         /// <summary>
         /// Parent cache entry
         /// </summary>
-        private readonly CacheEntry _cacheEntry;
+        private readonly ICacheEntry _cacheEntry;
 
         /// <summary>
         /// Set of results produced by loaders
@@ -42,8 +42,8 @@ namespace AgFx
         /// <summary>
         /// Initializes a new instance of the UpdateCompletionHandler class 
         /// </summary>
-        /// <param name="entry">parent <see cref="CacheEntry"/></param>
-        public UpdateCompletionHandler(CacheEntry entry)
+        /// <param name="entry">parent <see cref="ICacheEntry"/></param>
+        public UpdateCompletionHandler(ICacheEntry entry)
         {
             _cacheEntry = entry;
         }

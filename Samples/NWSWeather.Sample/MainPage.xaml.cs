@@ -3,12 +3,12 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-using System;
-using System.Windows;
-using Microsoft.Phone.Controls;
 using AgFx;
+using Microsoft.Phone.Controls;
 using NWSWeather.Sample.ViewModels;
+using System;
 using System.IO.IsolatedStorage;
+using System.Windows;
 
 namespace NWSWeather.Sample
 {
@@ -20,25 +20,22 @@ namespace NWSWeather.Sample
             InitializeComponent();            
         }
 
-        private void btnAddZipCode_Click(object sender, RoutedEventArgs e)
+        private async void btnAddZipCode_Click(object sender, RoutedEventArgs e)
         {
             // Load up a new ViewModel based on the zip.
             // This will either fetch new data from the Internet, or load the cached data off disk
             // as appropriate.
             //
-            this.DataContext = DataManager.Current.Load<WeatherForecastVm>(txtZipCode.Text,
-                    (vm) =>
-                    {
-                        // upon a succesful load, show the info panel.
-                        // this is a bit of a hack, but we can't databind against
-                        // a non-existant data context...
-                        info.Visibility = Visibility.Visible;
-                    },
-                    (ex) =>
-                    {
-                        MessageBox.Show("Failed to get data for " + txtZipCode.Text);
-                    }
-             );
+            this.DataContext = await DataManager.Current.LoadAsync<WeatherForecastVm>(txtZipCode.Text, (vm) =>
+            {
+                // upon a succesful load, show the info panel.
+                // this is a bit of a hack, but we can't databind against
+                // a non-existant data context...
+                info.Visibility = Visibility.Visible;
+            }, (ex) =>
+            {
+                MessageBox.Show("Failed to get data for " + txtZipCode.Text);
+            });
         }
 
         protected override void OnNavigatedFrom(System.Windows.Navigation.NavigationEventArgs e)
@@ -51,17 +48,20 @@ namespace NWSWeather.Sample
         protected override void OnNavigatedTo(System.Windows.Navigation.NavigationEventArgs e)
         {
             string zip;
-            try {
+            try
+            {
                 // if we have a saved zip, automatically load that up.
-                if (IsolatedStorageSettings.ApplicationSettings.TryGetValue("zip", out zip) && !String.IsNullOrEmpty(zip)) {
+                if (IsolatedStorageSettings.ApplicationSettings.TryGetValue("zip", out zip) && !String.IsNullOrEmpty(zip))
+                {
                     txtZipCode.Text = zip;
                     btnAddZipCode_Click(null, null);
-                    
+
                     // remove it in case of failure, we'll re-add it later.
                     IsolatedStorageSettings.ApplicationSettings.Remove("zip");
                 }
             }
-            catch {
+            catch
+            {
             }
             base.OnNavigatedTo(e);
         }

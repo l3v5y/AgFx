@@ -38,6 +38,7 @@ namespace AgFx
         /// <param name="stream"></param>
         public LoadRequestResult(Stream stream)
         {
+            // TODO: Ensure the stream is closed/cleaned up
             Stream = stream;
         }
 

@@ -46,7 +46,6 @@ namespace AgFx
         public NotifyPropertyChangedBase()
             : this(true)
         {
-
         }
 
         /// <summary>

@@ -9,10 +9,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
+using System.Threading;
+using Nito.AsyncEx;
 
 namespace AgFx
 {
-
     /// <summary>
     /// This class does most of the heavy lifting for this framework.
     /// 
@@ -23,28 +25,27 @@ namespace AgFx
     /// 3) Know how to kick of a new load for this item
     /// 4) Know how to decide which is the current value (cached or new load, based on expiration, etc.)    
     /// </summary>
-    internal class CacheEntry : IDisposable
+    internal class CacheEntry : ICacheEntry, IDisposable
     {
+        // TODO: Refactor CacheEntry into a few seperate classes/files, matching the 4 jobs above
+
         // some items we use in a bit field to improve instance size.
         //
-        private const int SynchronousModeMask =         0x00010000;
-        private const int GettingValueMask =            0x00100000;
-        private const int UsingCachedValueMask =        0x01000000;
-        private const int LoadPendingMask =             0x10000000;
-        private const int LiveValueSuccessMask =        0x00001000;
-        private const int VersionMask =                 0x00000FFF;
+        private const int SynchronousModeMask = 0x00010000;
+        private const int GettingValueMask = 0x00100000;
+        private const int UsingCachedValueMask = 0x01000000;
+        private const int LoadPendingMask = 0x10000000;
+        private const int LiveValueSuccessMask = 0x00001000;
+        private const int VersionMask = 0x00000FFF;
         private int _bitfield;
 
-        // actions pushed in by the DataManager.
-        //
-        public Func<LoadContext, Stream, bool, object> DeserializeAction { get; set; }
-        public Func<object> CreateDefaultAction { get; set; }
-        public Func<LiveValueLoader, bool> LoadAction { get; set; }
+        private readonly AsyncLock lockObject = new AsyncLock();
+
+        // TODO: Declare this locally
         public Func<object, Stream, bool> SerializeOptimizedDataAction { get; set; }
 
         // Completion notifications
         public UpdateCompletionHandler NextCompletedAction { get; private set; }
-        private readonly Action<CacheEntry> _proxyComplitionCallback;
 
         // Object information
         //
@@ -58,12 +59,12 @@ namespace AgFx
 
         // stats
         //
-        internal EntryStats _stats;
+        public EntryStats Stats { get; set; }
 
         // refresh and update state 
         //
         private DateTime _lastUpdatedTime;
-        private DateTime _valueExpirationTime = DateTime.MinValue;
+        private DateTime expirationTime;
 
         // these guys manage the loading of values from the 
         // cache or from the wire.
@@ -73,6 +74,7 @@ namespace AgFx
 
         // we cache policies based on type for perf 
         //
+        // TODO: replace with Cache<T, T2>
         static Dictionary<Type, CachePolicyAttribute> _cachedPolicies = new Dictionary<Type, CachePolicyAttribute>();
 
         /// <summary>
@@ -90,18 +92,13 @@ namespace AgFx
         /// <summary>
         /// The intended cache lifetime for this item.
         /// </summary>
-        public TimeSpan CacheTime
+        private TimeSpan CacheTime
         {
             get
             {
+                // TODO: What does this do?
                 EnsureCachePolicy();
                 return _cacheTime.Value;
-            }
-        }
-
-        public DateTime ExpirationTime {
-            get {
-                return _valueExpirationTime;
             }
         }
 
@@ -125,7 +122,8 @@ namespace AgFx
             {
                 return GetBoolValue(LiveValueSuccessMask);
             }
-            set {
+            set
+            {
                 SetBoolValue(LiveValueSuccessMask, value);
             }
         }
@@ -145,7 +143,7 @@ namespace AgFx
                 {
                     return true;
                 }
-                else if (_valueExpirationTime > DateTime.Now)
+                else if (expirationTime > DateTime.Now)
                 {
                     return true;
                 }
@@ -165,7 +163,8 @@ namespace AgFx
             }
             set
             {
-                lock (this) {
+                lock (this)
+                {
                     int data = _bitfield & ~VersionMask;
 
                     _bitfield = data | (value & VersionMask);
@@ -174,9 +173,9 @@ namespace AgFx
         }
 
         /// <summary>
-        /// Makes all load operations happen synchrounously for LoadFromCache
+        /// Makes all load operations happen synchronously for LoadFromCache
         /// </summary>
-        public bool SynchronousMode
+        private bool SynchronousMode
         {
             get
             {
@@ -200,21 +199,20 @@ namespace AgFx
             set
             {
                 _lastUpdatedTime = value;
-
                 UpdateLastUpdated();
             }
         }
 
+        // TODO: Should this be somewhere else -> Type extension method
         internal static string BuildUniqueName(Type objectType, LoadContext context)
         {
-
             return string.Format("{0}_{1}", objectType.Name, context.UniqueKey);
         }
 
         /// <summary>
         /// The unique name for this ObjectType + Identifier combo.
         /// </summary>
-        internal string UniqueName
+        public string UniqueName
         {
             get
             {
@@ -247,7 +245,7 @@ namespace AgFx
                 // Create a new value if necessary
                 //
                 bool isNew = _valueReference == null;
-                obj = CreateDefaultAction();
+                obj = CreateDefaultValue();
                 _valueReference = new WeakReference(obj);
 
                 // if it's not new, that means we're resurrecting the object value
@@ -258,10 +256,10 @@ namespace AgFx
                     Debug.WriteLine("A {0} (ID={1}) value has been GC'd, reloading.", ObjectType.Name, LoadContext.Identity);
                     _cacheLoader.Reset();
                     _liveLoader.Reset();
-                    SetBoolValue(UsingCachedValueMask, false);                    
-                    _valueExpirationTime = DateTime.MinValue;
+                    SetBoolValue(UsingCachedValueMask, false);
+                    expirationTime = DateTime.MinValue;
                     HaveWeEverGottenALiveValue = false;
-                }                
+                }
 
                 if (load)
                 {
@@ -278,7 +276,7 @@ namespace AgFx
 
         // Retrieves the value without queuing any loads.
         //
-        internal object ValueInternal
+        public object ValueInternal
         {
             get
             {
@@ -286,8 +284,10 @@ namespace AgFx
                 GetRootedObjectInternal(false, out obj);
                 return obj;
             }
-            set {
-                if (_valueReference == null) {
+            set
+            {
+                if (_valueReference == null)
+                {
                     _valueReference = new WeakReference(value);
                 }
             }
@@ -307,12 +307,11 @@ namespace AgFx
             {
                 GettingValue = true;
                 object value;
-
                 lock (this)
                 {
                     GetRootedObjectInternal(false, out value);
 
-                    _stats.OnRequest();
+                    Stats.OnRequest();
 
                     if (IsDataValid)
                     {
@@ -342,13 +341,12 @@ namespace AgFx
         /// <param name="objectType"></param>
         /// <param name="context"></param>
         /// <param name="proxyCallback">callback that should be invoked when update is finished</param>
-        public CacheEntry(LoadContext context, Type objectType, Action<CacheEntry> proxyCallback)
+        public CacheEntry(LoadContext context, Type objectType)
         {
-            _proxyComplitionCallback = proxyCallback;
             LoadContext = context;
             ObjectType = objectType;
 
-            _stats = new EntryStats(this);
+            Stats = new EntryStats(this);
 
             // set up our value loaders.
             //
@@ -365,7 +363,6 @@ namespace AgFx
             NextCompletedAction = new UpdateCompletionHandler(this);
         }
 
-
         // Helpers for accessing bit field.
         //
         private bool GetBoolValue(int mask)
@@ -375,19 +372,20 @@ namespace AgFx
 
         private void SetBoolValue(int mask, bool value)
         {
-            // clear it
-            _bitfield &= ~mask;
-
             if (value)
             {
                 _bitfield |= mask;
+            }
+            else
+            {
+                _bitfield &= ~mask;
             }
         }
 
         // Checks to make sure our value hasn't been cleaned up.
         // if it has, stop doing work because no one is holding the value reference.
         //
-        private bool CheckIfAnyoneCares()
+        public bool CheckIfAnyoneCares()
         {
             bool doesAnyoneCare = _valueReference != null && _valueReference.IsAlive;
 
@@ -399,9 +397,10 @@ namespace AgFx
             return doesAnyoneCare;
         }
 
-        internal void DoRefresh() {
-
-            if (CheckIfAnyoneCares()) {
+        internal void DoRefresh()
+        {
+            if (CheckIfAnyoneCares())
+            {
                 SetForRefresh();
                 Load(true);
             }
@@ -478,7 +477,7 @@ namespace AgFx
             }
 
             HaveWeEverGottenALiveValue = true;
-            
+
             // We are no longer using the cached value.
             //
             SetBoolValue(UsingCachedValueMask, false);
@@ -488,40 +487,65 @@ namespace AgFx
             //
             if (CachePolicy != AgFx.CachePolicy.NoCache)
             {
-                SerializeDataToCache(value, _liveLoader.UpdateTime, _valueExpirationTime, false);
+                SerializeDataToCache(value, _liveLoader.UpdateTime, expirationTime, false);
             }
         }
 
-        internal bool SerializeDataToCache(object value, DateTime updateTime, DateTime? expirationTime, bool optimizedOnly) {
+        private void ProxyCompletion()
+        {
+            // TODO: Cast to array first to prevent changes causing issues?
+            foreach (var proxy in ProxyManager.GetProxies(LoadContext, ObjectType))
+            {
+                // copy the values over
+                //
+                ReflectionSerializer.UpdateObject(ValueInternal, proxy.ProxyReference.Target, true, null);
+
+                // fire the update notification
+                //
+                if (proxy.UpdateAction != null)
+                {
+                    proxy.UpdateAction();
+                }
+            }
+        }
+
+        public bool SerializeDataToCache(object value, DateTime updateTime, DateTime? expirationTime, bool optimizedOnly)
+        {
             bool isOptimized = false;
             byte[] data = null;
 
             // see if we can optimize first
             //
-            if (SerializeOptimizedDataAction != null) {
-                using (MemoryStream outputStream = new MemoryStream()) {
-                    if (SerializeOptimizedDataAction(value, outputStream)) {
+            if (SerializeOptimizedDataAction != null)
+            {
+                using (MemoryStream outputStream = new MemoryStream())
+                {
+                    if (SerializeOptimizedDataAction(value, outputStream))
+                    {
                         outputStream.Flush();
                         outputStream.Seek(0, SeekOrigin.Begin);
                         var bytes = new byte[outputStream.Length];
                         outputStream.Read(bytes, 0, bytes.Length);
                         isOptimized = true;
                         data = bytes;
-                    }                    
+                    }
                 }
             }
 
-            if (optimizedOnly && !isOptimized) {
+            if (optimizedOnly && !isOptimized)
+            {
                 return false;
             }
 
             // oh well, no optimized stream, fall back
             // to normal data.
-            if (data == null) {
+            if (data == null)
+            {
                 data = _liveLoader.Data;
             }
 
-            if (expirationTime == null) {
+            if (expirationTime == null)
+            {
                 expirationTime = updateTime.Add(CacheTime);
             }
 
@@ -531,15 +555,18 @@ namespace AgFx
             return true;
         }
 
-        private void UpdateExpiration(DateTime lastUpdatedTime, ICachedItem cachedItem) {
+        private void UpdateExpiration(DateTime lastUpdatedTime, ICachedItem cachedItem)
+        {
             LastUpdatedTime = lastUpdatedTime;
 
-            if (cachedItem == null || cachedItem.ExpirationTime == null) {
-                _valueExpirationTime = LastUpdatedTime.Add(CacheTime);
+            if (cachedItem == null || cachedItem.ExpirationTime == null)
+            {
+                expirationTime = LastUpdatedTime.Add(CacheTime);
             }
-            else {
-                _valueExpirationTime = cachedItem.ExpirationTime.Value;
-            }            
+            else
+            {
+                expirationTime = cachedItem.ExpirationTime.Value;
+            }
         }
 
         /// <summary>
@@ -547,15 +574,17 @@ namespace AgFx
         /// </summary>
         /// <param name="instance"></param>
         /// <param name="loadContext"></param>
-        internal void UpdateValue(object instance, LoadContext loadContext) {
-
+        public void UpdateValue(object instance, LoadContext loadContext)
+        {
             UpdateExpiration(DateTime.Now, instance as ICachedItem);
 
-            LoadContext = loadContext;           
-            if (_valueReference != null && _valueReference.IsAlive) {
+            LoadContext = loadContext;
+            if (_valueReference != null && _valueReference.IsAlive)
+            {
                 UpdateFrom(null, instance);
             }
-            else {
+            else
+            {
                 ValueInternal = instance;
             }
         }
@@ -578,11 +607,11 @@ namespace AgFx
             UpdateFrom((ValueLoader)sender, e.Value);
             SetBoolValue(UsingCachedValueMask, true);
 
-            
+
             UpdateExpiration(e.UpdateTime, e.Value as ICachedItem);
         }
 
-        void CacheLoader_Failed(object s, ExceptionEventArgs e)
+        async void CacheLoader_Failed(object s, ExceptionEventArgs e)
         {
             // if the cache load failed, make sure we're doing a live load.
             // if we aren't, kick one off.
@@ -591,7 +620,7 @@ namespace AgFx
             if (!_liveLoader.IsBusy && !HaveWeEverGottenALiveValue)
             {
                 NextCompletedAction.RegisterActiveLoader(LoaderType.LiveLoader);
-                _liveLoader.FetchData(true);
+                await _liveLoader.FetchData();
             }
         }
 
@@ -608,7 +637,6 @@ namespace AgFx
             {
                 iupd.IsUpdating = true;
             }
-
         }
 
         /// <summary>
@@ -629,18 +657,20 @@ namespace AgFx
                 // root the object value so that it doesn't get GC'd while we're processing.
                 //
                 GetRootedObjectInternal(false, out _rootedValue);
-
-                PriorityQueue.AddWorkItem(() =>
-                    LoadInternal(force)
-                );
             }
+
+            // Conciously don't wait here, we want to make sure we do a load but don't block the UI thread at all
+            // TODO: Disable warnings
+            PriorityQueue.AddWorkItem(Task.Run(() =>
+                LoadInternal(force)
+            ));
         }
 
         /// <summary>
         /// Synchronously load a value from the cache and return it.
         /// </summary>
         /// <returns></returns>
-        internal object LoadFromCache()
+        public async Task<object> LoadFromCache()
         {
             try
             {
@@ -651,8 +681,8 @@ namespace AgFx
                 if (_cacheLoader.IsValid)
                 {
                     object value = ValueInternal;
-
-                    StartLoading(false, _cacheLoader);
+                    // TODO StartLoading could return something, instead of mutating state?
+                    await StartLoading(_cacheLoader);
                     return value;
                 }
             }
@@ -668,13 +698,13 @@ namespace AgFx
         /// LoadInternal does the heavy lifting of the load.
         /// </summary>
         /// <param name="force"></param>
-        private void LoadInternal(bool force)
+        private async Task LoadInternal(bool force)
         {
             try
             {
                 // first to see if we have a valid live value.
                 //
-                if (!force && DateTime.Now < _valueExpirationTime)
+                if (!force && DateTime.Now < expirationTime)
                 {
                     // somehow we got in here, so do nothing.
                     //
@@ -687,7 +717,7 @@ namespace AgFx
                     if (!_liveLoader.IsBusy)
                     {
                         Debug.WriteLine("{0}: Data for {1} (ID={2}) has expired, reloading.", DateTime.Now, ObjectType.Name, LoadContext.Identity);
-                        StartLoading(force, _liveLoader);
+                        await StartLoading(_liveLoader);
                     }
                     return;
                 }
@@ -695,7 +725,7 @@ namespace AgFx
                 {
                     Debug.WriteLine("{0}: Failed cache load for {1} (ID={2}) reloading live data.", DateTime.Now, ObjectType.Name, LoadContext.Identity);
 
-                    StartLoading(true, _liveLoader);
+                    await StartLoading(_liveLoader);
                     return;
                 }
                 else if (_cacheLoader.LoadState == DataLoadState.ValueAvailable)
@@ -721,8 +751,7 @@ namespace AgFx
                         //
 
                         // start a live load.
-                        StartLoading(false, _liveLoader);
-
+                        StartLoading(_liveLoader).Wait();
 
                         switch (CachePolicy)
                         {
@@ -736,12 +765,13 @@ namespace AgFx
                         }
                     }
 
+
                     Debug.WriteLine("{0}: Checking cache for {1} (ID={2})", DateTime.Now, ObjectType.Name, LoadContext.Identity);
                     try
                     {
                         if (_cacheLoader.IsCacheAvailable)
                         {
-                            StartLoading(false, _cacheLoader);
+                            StartLoading(_cacheLoader).Wait();
                         }
                     }
                     catch
@@ -749,10 +779,9 @@ namespace AgFx
                         if (isCacheValid)
                         {
                             Debug.WriteLine("{0}: Error cache for {1} (ID={2}), reloading", DateTime.Now, ObjectType.Name, LoadContext.Identity);
-                            StartLoading(true, _liveLoader);
+                            StartLoading(_liveLoader).Wait();
                         }
                     }
-
                 }
             }
             finally
@@ -764,14 +793,13 @@ namespace AgFx
         /// <summary>
         /// Start loading operation
         /// </summary>
-        /// <param name="force">indicates if loading should be forced</param>
         /// <param name="loader">loader that should be invoked</param>
-        private void StartLoading(bool force, ValueLoader loader)
+        private async Task StartLoading(ValueLoader loader)
         {
             NextCompletedAction.RegisterActiveLoader(loader.LoaderType);
             try
             {
-                loader.FetchData(force);
+                await loader.FetchData();
             }
             catch (Exception)
             {
@@ -796,7 +824,7 @@ namespace AgFx
             }
 
             LoaderType loaderType = loader != null ? loader.LoaderType : LoaderType.CacheLoader;
-           
+
             //  UpdateCompletionHandler makes sure to call handler on UI thread
             //
             try
@@ -804,17 +832,12 @@ namespace AgFx
                 if (ex == null)
                 {
                     NextCompletedAction.OnSuccess(loaderType);
-
-                    if (_proxyComplitionCallback != null)
-                    {
-                        _proxyComplitionCallback(this);
-                    }
+                    ProxyCompletion();
                 }
                 else
                 {
                     NextCompletedAction.OnError(loaderType, ex);
                 }
-
             }
             finally
             {
@@ -859,14 +882,16 @@ namespace AgFx
                         return;
                     }
 
-                    try {
+                    try
+                    {
 
-                        _stats.OnStartUpdate();
+                        Stats.OnStartUpdate();
 
-                        ReflectionSerializer.UpdateObject(source, value, true, LastUpdatedTime);                        
+                        ReflectionSerializer.UpdateObject(source, value, true, LastUpdatedTime);
                     }
-                    finally {
-                        _stats.OnCompleteUpdate();
+                    finally
+                    {
+                        Stats.OnCompleteUpdate();
                     }
                     // notify successful completion.
                     NotifyCompletion(loader, null);
@@ -912,9 +937,10 @@ namespace AgFx
         /// </summary>
         public void SetForRefresh()
         {
-            _valueExpirationTime = DateTime.Now;
-            
-            if (!_liveLoader.IsValid) {
+            expirationTime = DateTime.Now;
+
+            if (!_liveLoader.IsValid)
+            {
                 _liveLoader.Reset();
             }
 
@@ -922,573 +948,157 @@ namespace AgFx
             // essentially stop cache loads for this item going forward.
             //
             _cacheLoader.SetExpired();
-                                  
         }
 
         /// <summary>
         /// Clear the cache for this item.
         /// </summary>
-        internal void Clear()
+        public async Task ClearAsync()
         {
-            DataManager.StoreProvider.DeleteAll(UniqueName);
-        }
-
-        internal enum DataLoadState
-        {
-            None,
-            Loading,
-            Loaded,
-            Processing,
-            ValueAvailable,
-            Failed
-        }
-
-        internal class ExceptionEventArgs : EventArgs
-        {
-            public Exception Exception { get; set; }
-        }
-
-        internal class ValueAvailableEventArgs : EventArgs
-        {
-            public object Value { get; set; }
-            public DateTime UpdateTime { get; set; }
+            await DataManager.StoreProvider.DeleteAllAsync(UniqueName);
         }
 
         /// <summary>
-        /// Base ValueLoader class.  This class knows the basic steps
-        /// for loading a value and keeping track of where it's at in the load
-        /// lifecycle.
+        ///  cache loaders by type.
         /// </summary>
-        internal abstract class ValueLoader
+        private static readonly Dictionary<Type, object> _loaders = new Dictionary<Type, object>();
+
+        /// <summary>
+        /// Figure out what dataloader to use for the entry type.
+        /// </summary>
+        /// <param name="entry"></param>
+        /// <returns></returns>
+        public object GetDataLoader()
         {
-            /// <summary>
-            /// The CacheEntry this ValueLoader is associated with.
-            /// </summary>
-            public CacheEntry CacheEntry
+            object loader;
+
+            lock (_loaders)
             {
-                get;
-                private set;
-            }
-
-            public UpdateCompletionHandler NextCompletedAction { get; set; }
-
-            // events.
-            public event EventHandler Loading;
-            public event EventHandler<ValueAvailableEventArgs> ValueAvailable;
-            public event EventHandler<ExceptionEventArgs> LoadFailed;
-
-            public ValueLoader(CacheEntry owningEntry)
-            {
-                CacheEntry = owningEntry;
-            }
-
-            public DataLoadState LoadState
-            {
-                get;
-                protected set;
-            }
-
-            /// <summary>
-            /// The raw data associated with this loader.
-            /// </summary>
-            public byte[] Data
-            {
-                get;
-                protected set;
-            }
-
-            /// <summary>
-            /// The loader is busy if it is in a load or a process
-            /// action.
-            /// </summary>
-            public bool IsBusy
-            {
-                get
+                if (_loaders.TryGetValue(ObjectType, out loader))
                 {
-                    switch (LoadState)
-                    {
-                        case DataLoadState.None:
-                        case DataLoadState.Failed:
-                        case DataLoadState.ValueAvailable:
-                            return false;
-                        default:
-                            return true;
-                    }
+                    return loader;
                 }
             }
 
-            /// <summary>
-            /// Is this loader in a valid state?
-            /// </summary>
-            public abstract bool IsValid
-            {
-                get;
-            }
+            var attrs = ObjectType.GetTypeInfo().GetCustomAttributes(typeof(DataLoaderAttribute), true);
 
-            /// <summary>
-            /// Gets type of the loader
-            /// </summary>
-            public abstract LoaderType LoaderType { get; }
-
-            /// <summary>
-            /// Fetch the data for this loader.
-            /// </summary>
-            /// <param name="force"></param>
-            public void FetchData(bool force)
+            if (attrs.Any())
             {
-                lock (this)
+                DataLoaderAttribute dla = (DataLoaderAttribute)attrs.First();
+
+                if (dla.DataLoaderType != null)
                 {
-                    NextCompletedAction = CacheEntry.NextCompletedAction;
+                    loader = Activator.CreateInstance(dla.DataLoaderType);
+                }
+            }
+            else
+            {
+                // GetNestedTypes returns the nested types defined on the current
+                // type only, so it will not get loaders defined on super classes.
+                // So we just walk through the types until we find one or hit System.Object.
+                //
+                for (Type modelType = ObjectType;
+                    loader == null && modelType != typeof(object);
+                    modelType = modelType.GetTypeInfo().BaseType)
+                {
 
-                    // make sure we're not already in a loading state.
+                    // see if we already have a loader at this level
                     //
-                    switch (LoadState)
+                    if (_loaders.TryGetValue(modelType, out loader) && loader != null)
                     {
-                        case DataLoadState.Loading:
-                        case DataLoadState.Processing:
-                            return;
-                        case DataLoadState.Loaded:
-                            FireLoading();
-                            ProcessData();
-                            return;
+                        break;
                     }
 
-                    LoadState = DataLoadState.Loading;
+                    // TODO: Refactor this into reflection helper
+                    var loaders = from nt in modelType.GetTypeInfo().DeclaredNestedTypes
+                                  where nt.ImplementedInterfaces.Any(i => i.IsConstructedGenericType && i.GetGenericTypeDefinition() == typeof(IDataLoader<>))
+                                  select nt;
 
-                    try
+                    var loaderTypeInfo = loaders.FirstOrDefault();
+
+                    if (loaderTypeInfo != null)
                     {
-                        // kick off the derived class's load
-                        if (!FetchDataCore(force))
+                        loader = Activator.CreateInstance(loaderTypeInfo.AsType());
+
+                        // if we're walking base types, save this value so that the subsequent requests will get it.
+                        //
+                        if (loader != null && modelType != ObjectType)
                         {
-                            LoadState = DataLoadState.None;
+                            _loaders[modelType] = loader;
                         }
-                        else
-                        {
-                            FireLoading();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LoadState = DataLoadState.Failed;
-                        OnLoadFailed(ex);
-                        return;
                     }
                 }
             }
 
-            protected abstract bool FetchDataCore(bool force);
-
-            /// <summary>
-            /// Fire the Loading event.
-            /// </summary>
-            private void FireLoading()
+            lock (_loaders)
             {
-                if (Loading != null)
+                if (loader != null)
                 {
-                    Loading(this, EventArgs.Empty);
+                    _loaders[ObjectType] = loader;
+                    return loader;
                 }
             }
-
-            /// <summary>
-            /// We have data, now deserialize it.
-            /// </summary>
-            protected void ProcessData()
-            {
-
-                if (LoadState == DataLoadState.Processing)
-                {
-                    return;
-                }
-                LoadState = DataLoadState.Processing;
-
-                var data = Data;
-
-
-                try
-                {
-
-                    if (data != null)
-                    {
-                        if (!CacheEntry.CheckIfAnyoneCares())
-                        {
-                            // no one is listening, so just quit.
-                            LoadState = DataLoadState.Loaded;
-                            return;
-                        }
-
-                        var value = ProcessDataCore(data);
-
-                        // copy the value.
-                        //          
-                        OnValueAvailable(value, DateTime.MinValue);
-                        Data = null;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    OnLoadFailed(ex);
-                    LoadState = DataLoadState.Failed;
-                    return;
-                }
-            }
-
-            protected abstract object ProcessDataCore(byte[] data);
-
-            // Fire the load failed event
-            //
-            protected void OnLoadFailed(Exception ex)
-            {
-                LoadState = DataLoadState.Failed;
-                if (LoadFailed != null)
-                {
-                    LoadFailed(this,
-                        new ExceptionEventArgs()
-                        {
-                            Exception = ex
-                        }
-                    );
-                }
-            }
-
-            protected virtual void OnValueAvailable(object value, DateTime updateTime)
-            {
-                LoadState = DataLoadState.ValueAvailable;
-               
-                if (ValueAvailable != null)
-                {
-                    ValueAvailable(this, new ValueAvailableEventArgs()
-                    {
-                        Value = value,
-                        UpdateTime = updateTime
-                    });
-                }
-            }
-
-            // Reset the state of this Loader
-            public virtual void Reset()
-            {
-                LoadState = DataLoadState.None;
-                Data = null;
-            }
+            throw new InvalidOperationException(String.Format("DataLoader not specified for type {0}.  All DataManager-loaded types must implement a data loader by one of the following methods:\r\n\r\n1. Specify a IDataLoader-implementing type on the class with the DataLoaderAttribute.\r\n2. Create a public nested type that implements IDataLoader.", ObjectType.Name));
         }
 
-        /// <summary>
-        /// Loader responsible for managing loads from the cache.
-        /// </summary>
-        private class CacheValueLoader : ValueLoader
+        private object CreateDefaultValue()
         {
-            CacheItemInfo _cacheItemInfo;
-            bool _thereIsNoCacheItem;
+            var proxy = ProxyManager.GetProxies(LoadContext, ObjectType).FirstOrDefault();
 
-            public bool IsCacheAvailable
+            if (proxy != null && proxy.ProxyReference != null && proxy.ProxyReference.IsAlive)
             {
-                get
-                {
-                    return LoadState != DataLoadState.Failed && FindCacheItem();
-                }
+                return proxy.ProxyReference.Target;
             }
 
-            public override bool IsValid
+            var ci = ObjectType.GetDefaultConstructor();
+
+            var item = ci.Invoke(null);
+
+            if (item is ILoadContextItem)
             {
-                get
-                {
-                    // Valid if we're not in a failed state and there is a cached value to 
-                    // use that is not expired.
-                    //
-                    if (LoadState != DataLoadState.Failed && FindCacheItem())
-                    {
-                        return _cacheItemInfo != null && _cacheItemInfo.ExpirationTime > DateTime.Now;
-                    }
-                    return false;
-                }
+                ((ILoadContextItem)item).LoadContext = LoadContext;
             }
-
-            /// <summary>
-            /// Gets type of the loader
-            /// </summary>
-            public override LoaderType LoaderType
-            {
-                get { return LoaderType.CacheLoader; }
-            }
-
-            public bool SynchronousMode
-            {
-                get;
-                set;
-            }
-
-            public CacheValueLoader(CacheEntry owningEntry)
-                : base(owningEntry)
-            {
-
-            }
-
-            /// <summary>
-            /// Look in the store for a recent entry that we can load from.
-            /// </summary>
-            /// <returns></returns>
-            private bool FindCacheItem()
-            {
-                lock (this)
-                {
-                    if (_cacheItemInfo == null && !_thereIsNoCacheItem)
-                    {
-                        _cacheItemInfo = DataManager.StoreProvider.GetLastestExpiringItem(CacheEntry.UniqueName);
-                    }
-
-                    if (_cacheItemInfo == null)
-                    {
-                        // flat failure.
-                        if (!_thereIsNoCacheItem)
-                        {
-                            _thereIsNoCacheItem = true;
-                            Debug.WriteLine("No cache found for {0} (ID={1})", CacheEntry.ObjectType, CacheEntry.LoadContext.Identity);
-                        }
-                        return false;
-                    }
-                    return true;
-                }
-            }
-
-            /// <summary>
-            /// Pull the data off the store
-            /// </summary>
-            protected override bool FetchDataCore(bool force)
-            {
-                // First check if we have cached data.
-                //                
-                if (!FindCacheItem())
-                {
-                    // nope, nevermind.
-                    return false;
-                }
-
-                // if we have cached data, then mark ourself as loadable and load it up.
-                //
-                Debug.WriteLine(String.Format("{3}: Loading cached data for {0} (ID={4}), Last Updated={1}, Expiration={2}", CacheEntry.ObjectType.Name, _cacheItemInfo.UpdatedTime, _cacheItemInfo.ExpirationTime, DateTime.Now, CacheEntry.LoadContext.Identity));
-
-                // load it up.
-                //
-                try
-                {
-                    Data = DataManager.StoreProvider.Read(_cacheItemInfo);
-
-
-                    if (Data == null) {
-                        OnLoadFailed(new InvalidOperationException("The cache returned no data."));
-                        return false;
-                    }
-
-                    LoadState = DataLoadState.Loaded;
-                    ProcessData();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Cache load failed for {0} (ID={2}): {1}", CacheEntry.ObjectType.Name, ex.ToString(), CacheEntry.LoadContext.Identity);
-                    OnLoadFailed(ex);
-                    return false;
-                }
-            }
-
-            protected override void OnValueAvailable(object value, DateTime updateTime)
-            {
-                // substitute the cache's last updated time.
-                //
-                base.OnValueAvailable(value, _cacheItemInfo.UpdatedTime);
-            }
-
-            protected override object ProcessDataCore(byte[] data)
-            {
-                // check to see if this is an optimized cache 
-                //
-                bool isOptimized = _cacheItemInfo.IsOptimized;
-
-                Debug.WriteLine("{0}: Deserializing cached data for {1} (ID={3}), IsOptimized={2}", DateTime.Now, CacheEntry.ObjectType, isOptimized, CacheEntry.LoadContext.Identity);
-                using (var stream = new MemoryStream(data)) {
-
-                    try {
-                        CacheEntry._stats.OnStartDeserialize();
-                        return CacheEntry.DeserializeAction(CacheEntry.LoadContext, stream, isOptimized);
-                    }
-                    catch (Exception ex) {
-                        Debug.WriteLine("{0}: Exception cached data for {1} (ID={2}) Exception=({3})", DateTime.Now, CacheEntry.ObjectType, CacheEntry.LoadContext.Identity, ex);
-                        CacheEntry._stats.OnDeserializeFail();
-                        throw;
-                    }
-                    finally {
-                        CacheEntry._stats.OnCompleteDeserialize(data.Length);
-                    }                    
-                }
-            }
-
-            public override void Reset()
-            {
-                base.Reset();
-                _cacheItemInfo = null;
-                _thereIsNoCacheItem = false;
-            }
-
-            /// <summary>
-            /// Save the specified value back to the disk.
-            /// </summary>
-            /// <param name="uniqueName"></param>
-            /// <param name="data"></param>
-            /// <param name="updatedTime"></param>
-            /// <param name="expirationTime"></param>
-            /// <param name="isOptimized"></param>
-            public void Save(string uniqueName, byte[] data, DateTime updatedTime, DateTime expirationTime, bool isOptimized)
-            {
-                if (data == null)
-                {
-                    throw new ArgumentNullException("data");
-                }
-
-                _cacheItemInfo = new CacheItemInfo(uniqueName, updatedTime, expirationTime);
-                _cacheItemInfo.IsOptimized = isOptimized;
-                Data = null;
-                LoadState = DataLoadState.None;
-
-                Debug.WriteLine("Writing cache for {0} (ID={3}), IsOptimized={1}, Will expire {2}", CacheEntry.ObjectType.Name, _cacheItemInfo.IsOptimized, _cacheItemInfo.ExpirationTime, CacheEntry.LoadContext.Identity.ToString() );
-                DataManager.StoreProvider.WriteAsync(_cacheItemInfo, data);
-            }
-
-            internal void SetExpired()
-            {
-                // mark this as a failed load to prevent it from being used in the future.
-                //
-                LoadState = DataLoadState.Failed;
-            }
+            return item;
         }
 
-        /// <summary>
-        /// Loader responsible for loading new data.
-        /// </summary>
-        internal class LiveValueLoader : ValueLoader
+        public object DeserializeAction(LoadContext id, Stream data, bool isOptimized)
         {
-            private static TimeSpan RetryTimeout = TimeSpan.FromSeconds(60);
+            var loader = GetDataLoader();
+            if (loader == null) throw new InvalidOperationException("Could not find loader for type: " + ObjectType.Name);
 
-            /// <summary>
-            /// If a load fails, we wait 60 seconds before retrying it.  The avoids
-            /// reload loops.
-            /// </summary>
-            private DateTime? _loadRetryTime;
+            // get the loader and ask for deserialization
+            //                
+            object deserializedObject = null;
 
-            public override bool IsValid
+            if (isOptimized)
             {
-                get
+                var idl = (IDataOptimizer)loader;
+
+                if (idl == null)
                 {
-                    if (LoadState == DataLoadState.Failed && _loadRetryTime.GetValueOrDefault() > DateTime.Now)
-                    {
-                        return false;
-                    }
-                    return true;
+                    throw new InvalidOperationException("Data is optimized but object does not implmenent IDataOptimizer");
                 }
+                deserializedObject = idl.DeserializeOptimizedData(LoadContext, ObjectType, data);
             }
-
-            /// <summary>
-            /// Gets type of the loader
-            /// </summary>
-            public override LoaderType LoaderType
+            else
             {
-                get { return LoaderType.LiveLoader; }
+                deserializedObject = DataLoaderProxy.Deserialize(loader, LoadContext, ObjectType, data);
             }
 
-            public DateTime UpdateTime
+            if (deserializedObject == null)
             {
-                get;
-                private set;
+                throw new InvalidOperationException(String.Format("Deserialize returned null for {0}, id='{1}'", ObjectType.Name, id));
             }
 
-            public LiveValueLoader(CacheEntry entry)
-                : base(entry)
+            if (!ObjectType.IsInstanceOfType(deserializedObject))
             {
+                throw new InvalidOperationException(String.Format("Returned object is {0} when {1} was expected", deserializedObject.GetType().Name, ObjectType.Name));
             }
-
-            protected override bool FetchDataCore(bool force)
-            {
-                // I refuse.
-                if (!IsValid)
-                {
-                    return false;
-                }
-
-                Debug.WriteLine("{0}: Queuing load for {1} (ID={2})", DateTime.Now, CacheEntry.ObjectType.Name, CacheEntry.LoadContext.Identity);
-                CacheEntry._stats.OnStartFetch();
-                return CacheEntry.LoadAction(this);
-            }
-
-            protected override object ProcessDataCore(byte[] data)
-            {
-                Debug.WriteLine("{0}: Deserializing live data for {1} (ID={2})", DateTime.Now, CacheEntry.ObjectType, CacheEntry.LoadContext.Identity);
-                using (var stream = new MemoryStream(data)) {
-                    try {
-                        CacheEntry._stats.OnStartDeserialize();
-                        return CacheEntry.DeserializeAction(CacheEntry.LoadContext, stream, false);
-                    }
-                    catch {
-                        CacheEntry._stats.OnDeserializeFail();
-                        throw;
-                    }
-                    finally {
-                        CacheEntry._stats.OnCompleteDeserialize(data.Length);
-                    }
-                }
-            }
-
-            internal void OnLoadSuccess(Stream result)
-            {
-                CacheEntry._stats.OnCompleteFetch(true);
-                UpdateTime = DateTime.Now;
-
-                // okay, we've got some data.  blow it into 
-                // a byte array.
-                if (result != null)
-                {
-                    byte[] bytes = new byte[result.Length];
-                    result.Read(bytes, 0, bytes.Length);
-                    Data = bytes;
-                }
-
-                LoadState = DataLoadState.Loaded;
-                base.ProcessData();
-            }
-
-            internal void OnLoadFail(LoadRequestFailedException exception)
-            {
-                CacheEntry._stats.OnCompleteFetch(false);
-                // the live load failed, set our retry limit.
-                //
-                Debug.WriteLine("Live load failed for {0} (ID={2}) Message={1}", exception.ObjectType.Name, exception.Message, exception.LoadContext.Identity);
-                _loadRetryTime = DateTime.Now.Add(RetryTimeout);
-                LoadState = DataLoadState.Failed;
-                OnLoadFailed(exception);
-            }
-
-            protected override void OnValueAvailable(object value, DateTime updateTime)
-            {
-                // note we substitute our caluclated update time for the one passed in.
-                //
-                base.OnValueAvailable(value, UpdateTime);
-            }
-
-            public override void Reset()
-            {
-                _loadRetryTime = null;
-                UpdateTime = DateTime.MinValue;
-                base.Reset();
-            }
-
-
+            return deserializedObject;
         }
 
-        public void Dispose() {
-         
+        public void Dispose()
+        {
         }
-        
     }
-
 }
-
-
-

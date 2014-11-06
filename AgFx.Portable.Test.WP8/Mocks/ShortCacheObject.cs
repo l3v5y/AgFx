@@ -131,30 +131,21 @@ namespace AgFx.Test.Mocks
                 i = intValue;
             }
 
-            public override void Execute(Action<LoadRequestResult> result)
+            public override async Task<LoadRequestResult> Execute()
             {
-                ThreadPool.QueueUserWorkItem((state) =>
+                await Task.Delay(LoadTimeMs);
+                string str = s;
+                int intVal = i;
+                MemoryStream ms = WriteToStream(str, intVal);
+
+                if (Error == null)
                 {
-                    Thread.Sleep(LoadTimeMs);
-                    string str = s;
-                    int intVal = i;
-                    MemoryStream ms = WriteToStream(str, intVal);
-                    try
-                    {
-                        if (Error == null)
-                        {
-                            result(new LoadRequestResult(ms));
-                        }
-                        else
-                        {
-                            result(new LoadRequestResult(Error));
-                        }
-                    }
-                    catch
-                    {
-                    }
-                },
-                null);
+                    return new LoadRequestResult(ms);
+                }
+                else
+                {
+                    return new LoadRequestResult(Error);
+                }
             }
 
             public static MemoryStream WriteToStream(string str, int intVal)

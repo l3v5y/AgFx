@@ -1,6 +1,7 @@
 ﻿using AgFx.Test.Mocks;
 using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace AgFx.Test
 {
@@ -16,25 +17,17 @@ namespace AgFx.Test
         }
 
         [TestMethod]
-        //[Ignore]
-        public void LoadRequestCanExecute()
+        public async Task LoadRequestCanExecute()
         {
-            var resetEvent = new ManualResetEvent(false);
-
             var mockDataLoader = new ShortCacheObject.SCODataLoader();
             var loadRequest = DataLoaderProxy.GetLoadRequest(mockDataLoader, new LoadContext("mock"), typeof(ShortCacheObject));
             Assert.IsInstanceOfType(loadRequest, typeof(ShortCacheObject.SCOLoadRequest));
 
-            loadRequest.Execute((result) =>
-            {
-                resetEvent.Set();
+            var result = await loadRequest.Execute();
 
-                Assert.IsNotNull(result);
-                Assert.IsNull(result.Error);
-                Assert.Equals(19, result.Stream.Length);
-            });
-
-            resetEvent.WaitOne();
+            Assert.IsNotNull(result);
+            Assert.IsNull(result.Error);
+            Assert.AreEqual(19, result.Stream.Length);
         }
     }
 }

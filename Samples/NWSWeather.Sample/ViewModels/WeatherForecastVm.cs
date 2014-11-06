@@ -3,10 +3,10 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-
-using System;
 using AgFx;
+using Nito.AsyncEx;
 using NWSWeather.Sample.Services;
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
@@ -35,13 +35,14 @@ namespace NWSWeather.Sample.ViewModels
         /// ZipCode info is the name of the city for the zipcode.  This is a sepearate 
         /// service lookup, so we treat it seperately.
         /// </summary>
-        public ZipCodeVm ZipCodeInfo
+        public INotifyTaskCompletion<ZipCodeVm> ZipCodeInfo
         {
             get
             {
-                return DataManager.Current.Load<ZipCodeVm>(LoadContext.ZipCode, null, (ex) => {
+                return NotifyTaskCompletion.Create<ZipCodeVm>(DataManager.Current.LoadAsync<ZipCodeVm>(LoadContext.ZipCode, null, (ex) =>
+                {
                     MessageBox.Show("Can't find zip code " + LoadContext.ZipCode);
-                });
+                }));
             }
         }
 
@@ -68,9 +69,7 @@ namespace NWSWeather.Sample.ViewModels
                 RaisePropertyChanged("WeatherPeriods");
             }
         }
-
-
-        
+                
         /// <summary>
         /// Our loader, which knows how to do two things:
         /// 1. Build the URI for requesting data for a given zipcode
@@ -122,9 +121,7 @@ namespace NWSWeather.Sample.ViewModels
                 }
 
                 return vm;
-
             }
         }
-
     }
 }

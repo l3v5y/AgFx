@@ -3,13 +3,12 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-
-
 using System;
 using System.Globalization;
 using System.Windows.Data;
 
-namespace AgFx.Converters {
+namespace AgFx.Converters
+{
     /// <summary>
     /// Converter for applying a string format to a value.
     /// 
@@ -31,10 +30,11 @@ namespace AgFx.Converters {
         /// <returns></returns>
         public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         {
-            if (value == null || (value is string && ((string)value).Length == 0)) {
+            if (value == null || (value is string && ((string)value).Length == 0))
+            {
                 return "";
             }
-            
+
             if (culture == null)
             {
                 culture = CultureInfo.CurrentCulture;

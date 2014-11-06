@@ -46,7 +46,6 @@ namespace AgFx
     /// </summary>
     public class ModelItemBase : NotifyPropertyChangedBase, IUpdatable
     {
-
         private LoadContext _lc;
 
         /// <summary>

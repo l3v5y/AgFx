@@ -69,8 +69,8 @@
                     <RowDefinition Height="30" />
                 </Grid.RowDefinitions>
                 <StackPanel Orientation="Horizontal" Grid.Row="0">
-                    <TextBlock Text="{Binding ZipCodeInfo.City}" FontWeight="Bold"/>
-                    <TextBlock Text="{Binding ZipCodeInfo.State}" FontWeight="Bold" Margin="5,0,0,0" HorizontalAlignment="Left" />
+                    <TextBlock Text="{Binding ZipCodeInfo.Result.City}" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding ZipCodeInfo.Result.State}" FontWeight="Bold" Margin="5,0,0,0" HorizontalAlignment="Left" />
                 </StackPanel>
 
                 <Border Visibility="{Binding IsUpdating, Converter={StaticResource VisibilityConverter1}, ConverterParameter=!}" Grid.Row="1">

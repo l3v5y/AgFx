@@ -3,15 +3,13 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-
-using System;
 using AgFx;
-using System.Xml.Linq;
+using System;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace NWSWeather.Sample.ViewModels
 {
-
     /// <summary>
     /// Our wrapper around fetching location information for a zipcode - city, state, etc.
     /// </summary>
@@ -156,14 +154,6 @@ namespace NWSWeather.Sample.ViewModels
                 vm.TimeZone = table.Element("TIME_ZONE").Value;
                 return vm;
             }
-        }
-        
-
-        
-        
-
-        
-
-        
+        }        
     }
 }

@@ -4,17 +4,17 @@
 // All other rights reserved.
 
 
-using System.Windows;
-using System.Windows.Navigation;
+using AgFx;
 using Microsoft.Phone.Controls;
 using Microsoft.Phone.Shell;
-using System.Windows.Controls;
-using System.Windows.Data;
-using AgFx;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Navigation;
 
 namespace NWSWeather.Sample
 {
@@ -84,11 +84,7 @@ namespace NWSWeather.Sample
         // This code will not execute when the application is closing
         private void Application_Deactivated(object sender, DeactivatedEventArgs e)
         {
-            AgFx.DataManager.Current.Flush();
-
-            PrintReport();
-
-        
+            PrintReport();       
         }
 
         [Conditional("DEBUG")]
@@ -115,13 +111,10 @@ namespace NWSWeather.Sample
         // This code will not execute when the application is deactivated
         private void Application_Closing(object sender, ClosingEventArgs e)
         {
-
-           PrintReport();
-            
+           PrintReport();            
 
             // anything that's more than a few hours old?  no, thanks.
-            AgFx.DataManager.Current.Cleanup(DateTime.Now.AddHours(-3), null);
-            AgFx.DataManager.Current.Flush();            
+           DataManager.Current.CleanupAsync(DateTime.Now.AddHours(-3)).Wait();
         }
 
         // Code to execute if a navigation fails

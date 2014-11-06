@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Windows.Data;
 
-namespace AgFx.Converters {
-
+namespace AgFx.Converters
+{
     /// <summary>
     /// Take a boolean input and inverts its value.
     /// </summary>
-    public class NotConverter : IValueConverter {
-
+    public class NotConverter : IValueConverter
+    {
         /// <summary>
         /// Inverts the value of value to it's opposite, for booleans.
         /// </summary>
@@ -16,8 +16,10 @@ namespace AgFx.Converters {
         /// <param name="parameter"></param>
         /// <param name="culture"></param>
         /// <returns>The opposite of (bool)value.</returns>
-        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) {
-            if (value is bool) {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            if (value is bool)
+            {
                 return !(bool)value;
             }
             return value;
@@ -31,7 +33,8 @@ namespace AgFx.Converters {
         /// <param name="parameter"></param>
         /// <param name="culture"></param>
         /// <returns></returns>
-        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) {
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
             throw new NotImplementedException();
         }
     }

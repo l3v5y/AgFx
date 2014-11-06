@@ -3,12 +3,8 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-
-
 namespace AgFx
 {
-    // TODO: Investigate the right scenarios for this and tombstoning.
-
     /// <summary>
     /// Marks the model item's cache policy.
     /// </summary>

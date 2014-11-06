@@ -5,14 +5,13 @@ using System.IO;
 
 namespace AgFx
 {
-
     /// <summary>
     /// Provides a container for the access stats for a CacheEntry
     /// </summary>
-    internal class EntryStats
+   public class EntryStats
     {
 
-        internal CacheEntry _cacheEntry;
+        internal ICacheEntry _cacheEntry;
 
         private List<double> _fetchTimes;
         private List<double> _deserializeTimes;
@@ -147,7 +146,7 @@ namespace AgFx
             }
         }
 
-        public EntryStats(CacheEntry entry)
+        public EntryStats(ICacheEntry entry)
         {
             _cacheEntry = entry;
         }

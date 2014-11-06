@@ -71,6 +71,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\AgFx.Portable.Test\HashedFileStoreProviderTests.cs">
+      <Link>HashedFileStoreProviderTests.cs</Link>
+    </Compile>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
@@ -79,6 +82,7 @@
     <Compile Include="DataLoaderProxyTests.cs" />
     <Compile Include="DataManagerTests.cs" />
     <Compile Include="Dispatcher.cs" />
+    <Compile Include="LiveValueLoaderTests.cs" />
     <Compile Include="LocalizedStrings.cs" />
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
@@ -101,7 +105,6 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>AppResources.resx</DependentUpon>
     </Compile>
-    <Compile Include="StoreProviderTests.cs" />
     <Compile Include="TestHelpers.cs" />
     <Compile Include="UITestMethodAttribute.cs" />
   </ItemGroup>
@@ -150,6 +153,10 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\AgFx.Controls.Phone\AgFx.Controls.Phone.csproj">
+      <Project>{cdbbc960-2f8d-4e4f-932b-496204f7faaf}</Project>
+      <Name>AgFx.Controls.Phone</Name>
+    </ProjectReference>
     <ProjectReference Include="..\AgFx.Portable\AgFx.Portable.csproj">
       <Project>{d7bd5901-3f1d-4113-8036-d512982328d6}</Project>
       <Name>AgFx.Portable</Name>
@@ -159,6 +166,9 @@
     <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="Castle.Core">
+      <HintPath>..\Lib\Castle.Core.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Phone.Controls.Toolkit">
       <HintPath>..\packages\WPtoolkit.4.2012.10.30\lib\wp8\Microsoft.Phone.Controls.Toolkit.dll</HintPath>
     </Reference>
@@ -167,6 +177,9 @@
     </Reference>
     <Reference Include="Microsoft.VisualStudio.QualityTools.UnitTesting.Phone">
       <HintPath>..\packages\WPToolkitTestFx.4.2012.11.14\lib\wp8\Microsoft.VisualStudio.QualityTools.UnitTesting.Phone.dll</HintPath>
+    </Reference>
+    <Reference Include="Moq.Silverlight">
+      <HintPath>..\Lib\Moq.Silverlight.dll</HintPath>
     </Reference>
     <Reference Include="PCLStorage, Version=1.0.0.0, Culture=neutral, PublicKeyToken=286fe515a2c35b64, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>

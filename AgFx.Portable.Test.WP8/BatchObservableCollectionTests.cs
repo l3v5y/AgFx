@@ -16,6 +16,7 @@ namespace AgFx.Test
         }
 
         [TestMethod]
+        [Ignore]
         public void TestAddRangeIsAsynchronousOnUiThread()
         {
             var resetEvent = new ManualResetEvent(false);

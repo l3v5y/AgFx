@@ -7,8 +7,8 @@ using System;
 using System.Windows;
 using System.Windows.Data;
 
-namespace AgFx.Converters {
-
+namespace AgFx.Converters
+{
     /// <summary>
     /// Converts a value into a Visibility so parts of the UI can be shown/hidden in response to view model values.
     /// 
@@ -18,7 +18,6 @@ namespace AgFx.Converters {
     /// </summary>
     public class VisibilityConverter : IValueConverter
     {
-
         /// <summary>
         /// Converts a value into a Visibility.
         /// </summary>
@@ -43,10 +42,12 @@ namespace AgFx.Converters {
             {
                 visible = 0.0 != (double)value;
             }
-            else if (value is string) {
+            else if (value is string)
+            {
                 visible = ((string)value).Length > 0;
             }
-            else if (value == null) {
+            else if (value == null)
+            {
                 visible = false;
             }
 
@@ -54,7 +55,7 @@ namespace AgFx.Converters {
             {
                 visible = !visible;
             }
-        
+
             return visible ? Visibility.Visible : Visibility.Collapsed;
         }
 

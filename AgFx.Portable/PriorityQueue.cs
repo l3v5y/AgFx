@@ -4,8 +4,10 @@
 // All other rights reserved.
 
 
+using Punchclock;
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace AgFx
 {
@@ -15,9 +17,10 @@ namespace AgFx
     /// </summary>
     public class PriorityQueue
     {
-        static IWorkerThread storageWorker = new WorkerThread(10, "Storage Thread");
-        static IWorkerThread networkWorker = new WorkerThread(0, "Network Thread");
-        static IWorkerThread workWorker = new WorkerThread(25, "General thread");
+        static OperationQueue workQueue = new OperationQueue(4);
+        private const int StoragePriority = 10;
+        private const int NetworkPriority = 1;
+        private const int GeneralWorkPriority = 5;
 
         public static bool IsOnUiThread
         {
@@ -74,27 +77,27 @@ namespace AgFx
         /// Add a work item that will affect storage
         /// </summary>
         /// <param name="workItem"></param>
-        public static void AddStorageWorkItem(Action workItem)
+        public static async Task AddStorageWorkItem(Task workItem)
         {
-            storageWorker.AddWorkItem(workItem);
+            await workQueue.Enqueue(StoragePriority, () => workItem);
         }
 
         /// <summary>
         /// Add a general work item.
         /// </summary>
         /// <param name="workitem"></param>
-        public static void AddWorkItem(Action workitem)
+        public static async Task AddWorkItem(Task workitem)
         {
-            workWorker.AddWorkItem(workitem);
+            await workQueue.Enqueue(GeneralWorkPriority, () => workitem);
         }
 
         /// <summary>
         /// Add a work item that will result in a network requeset
         /// </summary>
         /// <param name="workitem"></param>
-        public static void AddNetworkWorkItem(Action workitem)
+        public static async Task AddNetworkWorkItem(Task workitem)
         {
-            networkWorker.AddWorkItem(workitem);
+            await workQueue.Enqueue(NetworkPriority, () => workitem);
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace AgFx.Authorisation
@@ -32,7 +33,7 @@ namespace AgFx.Authorisation
         /// <typeparam name="T"></typeparam>
         /// <typeparam name="L"></typeparam>
         /// <returns></returns>
-        protected static T GetCurrentLoginModel<T, L>()
+        protected static async Task<T> GetCurrentLoginModel<T, L>()
             where T : LoginModel, new()
             where L : LoginLoadContext, new()
         {
@@ -40,7 +41,7 @@ namespace AgFx.Authorisation
             {
                 L defaultContext = new L();
 
-                _current = DataManager.Current.LoadFromCache<T>(defaultContext);
+                _current = await DataManager.Current.LoadFromCacheAsync<T>(defaultContext);
 
                 if (_current.IsLoggedIn)
                 {
@@ -85,7 +86,7 @@ namespace AgFx.Authorisation
                     }
                     else if (_hasLoggedIn)
                     {
-                        Logout(this);
+                        Logout(this).Wait();
                     }
                 }
                 return false;
@@ -135,7 +136,7 @@ namespace AgFx.Authorisation
             return true;
         }
 
-        protected static void Login<T>(T model) where T : LoginModel, new()
+        protected static async Task LoginAsync<T>(T model) where T : LoginModel, new()
         {
             if (model.IsLoggedIn)
             {
@@ -144,11 +145,11 @@ namespace AgFx.Authorisation
                     _current.UpdateFrom(model);
                 }
                 _current.RaiseLogin();
-                DataManager.Current.Save(model, model.LoadContext);
+                await DataManager.Current.SaveAsync(model, model.LoadContext);
             }
         }
 
-        public static void Login<T>(T current, string username, string password, Action<Exception> error) where T : LoginModel, new()
+        public static async Task Login<T>(T current, string username, string password, Action<Exception> error) where T : LoginModel, new()
         {
             if (current.IsLoggedIn)
             {
@@ -159,8 +160,7 @@ namespace AgFx.Authorisation
             current.LoadContext.Password = password;
 
             current.OnLoggingIn();
-
-            DataManager.Current.Refresh<T>(current.LoadContext, (lm) =>
+            await DataManager.Current.RefreshAsync<T>(current.LoadContext, (lm) =>
             {
                 if (lm.IsLoggedIn)
                 {
@@ -177,7 +177,7 @@ namespace AgFx.Authorisation
             });
         }
 
-        public static void Logout<T>(T current) where T : LoginModel, new()
+        public static async Task Logout<T>(T current) where T : LoginModel, new()
         {
             if (current != null)
             {
@@ -185,8 +185,8 @@ namespace AgFx.Authorisation
                 {
                     current.Token = null;
                     NotificationManager.Current.RaiseMessage(LogoutMessage, current);
-                    DataManager.Current.Clear<T>(current.LoadContext);
-                    DataManager.Current.RegisterProxy<T>(current);
+                    await DataManager.Current.ClearAsync<T>(current.LoadContext);
+                    await DataManager.Current.RegisterProxy<T>(current);
                     current._hasLoggedIn = false;
                     current.OnLoggedOut();
                 }
