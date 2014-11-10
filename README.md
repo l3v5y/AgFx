@@ -1,21 +1,17 @@
 # AgFx Windows Phone App and Data Caching Framework
-### Build great data-connected Windows Phone 7 applications.
+### Build great data-connected WP8, W8 etc. applications
 
-Welcome to AgFx, a framework for building Windows Phone 7 applications. This framework exists because many apps for Windows Phone 7 run into the same types of problems around managing data, keeping work off of the UI thread, and optimizing network usage. It's goal is to make all of this easy so you can focus on writing your application.
+Welcome to AgFx, a framework for building Windows (Phone) applications. This framework exists because many apps run into the same types of problems around managing data, keeping work off of the UI thread, and optimizing network usage. 
+It's goal is to make all of this easy so you can focus on writing your application.
 
 To get started with AgFx, check out [this tutorial](http://agfx.codeplex.com/wikipage?title=Tutorial&referringTitle=Home) which not only walks through the basic process of building an AgFx-based application, but also gives an overview of what the framework can do.
 
 AgFx currently supports:
 
-* Windows Phone 7
-* Windows Phone 7.5 (Mango)
-
-### Project Status
-
-AgFx is in the process of being moved to GitHub from it's original home on [CodePlex](http://agfx.codeplex.com)
-
-### NuGet
-AgFx is also available via NuGet [here](http://nuget.org/List/Packages/AgFx).
+* Windows Phone 8
+* Windows Phone 8.1
+* .Net 4.5
+* Windows 8
 
 ### Features
 
@@ -25,7 +21,6 @@ AgFx is also available via NuGet [here](http://nuget.org/List/Packages/AgFx).
 * Instance tracking ensures that all parts of your app are referencing the same instance - an update in one place will update data in other places 
 * Flexible framework for defining how objects are cached, how long the cache is valid, and how to handle invalid cache items, etc. 
 * Simple framework for app-wide broadcast messages 
-* Many helper classes for implementing common pattern in Windows Phone 7 apps. 
 * Debugging features to allow you to see what AgFx is doing and see reports for timings of how the network fetch and deserilization parts of your app are performing.
 
 ### Usage Overview
