@@ -121,11 +121,11 @@ namespace AgFx
                     throw new ArgumentOutOfRangeException();
             }
 
-            if (orderedResults != null && orderedResults.Count() > 0)
+            if (orderedResults != null && orderedResults.Count > 0)
             {
-                bool errorHandlerCalled = false;
+                var errorHandlerCalled = false;
 
-                List<CompletionHandler> subscribers = new List<CompletionHandler>(_subscribers);
+                var subscribers = new List<CompletionHandler>(_subscribers);
                 foreach (var loadResult in orderedResults)
                 {
                     if(loadResult.Error == null)
@@ -133,7 +133,7 @@ namespace AgFx
                         foreach (var subscriber in subscribers.Where(subscriber => subscriber.SuccessAction != null))
                         {
                             CompletionHandler localSubscriber = subscriber;
-                            PriorityQueue.AddUiWorkItem(() => localSubscriber.SuccessAction(), false);
+                            localSubscriber.SuccessAction();
                         }
                     }
                     else
@@ -141,8 +141,8 @@ namespace AgFx
                         foreach (var subscriber in subscribers.Where(subscriber => subscriber.ErrorAction != null))
                         {
                             var localSubscriber = subscriber;
-                            LoadResult localResult = loadResult;
-                            PriorityQueue.AddUiWorkItem(() => localSubscriber.ErrorAction(localResult.Error), false);
+                            var localResult = loadResult;
+                            localSubscriber.ErrorAction(localResult.Error);
                             errorHandlerCalled = true;
                         }
                     }

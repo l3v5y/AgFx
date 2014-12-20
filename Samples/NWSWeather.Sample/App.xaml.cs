@@ -6,9 +6,7 @@
 
 using System.Windows;
 using System.Windows.Navigation;
-using Microsoft.Phone.Controls;
 using Microsoft.Phone.Shell;
-using AgFx.Controls;
 using System.Windows.Controls;
 using System.Windows.Data;
 using AgFx;
@@ -16,6 +14,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System;
+using AgFx.IsoStore;
+using Microsoft.Phone.Controls;
 
 namespace NWSWeather.Sample
 {
@@ -25,7 +25,8 @@ namespace NWSWeather.Sample
         /// Provides easy access to the root frame of the Phone Application.
         /// </summary>
         /// <returns>The root frame of the Phone Application.</returns>
-        public PhoneApplicationFrameEx RootFrame { get; private set; }
+        public PhoneApplicationFrame RootFrame { get; private set; }
+        public DataManager DataManager { get; private set; }
 
         /// <summary>
         /// Constructor for the Application object.
@@ -36,7 +37,7 @@ namespace NWSWeather.Sample
             UnhandledException += Application_UnhandledException;
 
             // Show graphics profiling information while debugging.
-            if (System.Diagnostics.Debugger.IsAttached)
+            if(System.Diagnostics.Debugger.IsAttached)
             {
                 // Display the current frame rate counters.
                 Application.Current.Host.Settings.EnableFrameRateCounter = true;
@@ -55,17 +56,11 @@ namespace NWSWeather.Sample
             // Phone-specific initialization
             InitializePhoneApplication();
 
-            ProgressBar pb = new ProgressBar();
-            pb.Height = 20;
-            
-            RootFrame.HeaderContent = pb;
 
-            Binding pbBinding = new Binding("IsLoading");
-            pbBinding.Source = DataManager.Current;
-            pb.SetBinding(ProgressBar.IsIndeterminateProperty, pbBinding);
-
-            DataManager.ShouldCollectStatistics = true;
-
+            DataManager = new DataManager(new HashedIsoStoreProvider("cache"), new WPUiDispatcher())
+            {
+                ShouldCollectStatistics = true
+            };
         }
 
         // Code to execute when the application is launching (eg, from Start)
@@ -84,19 +79,15 @@ namespace NWSWeather.Sample
         // This code will not execute when the application is closing
         private void Application_Deactivated(object sender, DeactivatedEventArgs e)
         {
-            AgFx.DataManager.Current.Flush();
-
             PrintReport();
-
-        
         }
 
         [Conditional("DEBUG")]
-        private static void PrintReport() {
+        private void PrintReport() {
 
             StringWriter writer = new StringWriter();
 
-            AgFx.DataManager.Current.GetStatisticsReport(writer, false);
+            DataManager.GetStatisticsReport(writer, false);
 
             writer.Flush();
 
@@ -115,13 +106,10 @@ namespace NWSWeather.Sample
         // This code will not execute when the application is deactivated
         private void Application_Closing(object sender, ClosingEventArgs e)
         {
-
-           PrintReport();
-            
+            PrintReport();
 
             // anything that's more than a few hours old?  no, thanks.
-            AgFx.DataManager.Current.Cleanup(DateTime.Now.AddHours(-3), null);
-            AgFx.DataManager.Current.Flush();            
+            DataManager.Cleanup(DateTime.Now.AddHours(-3));
         }
 
         // Code to execute if a navigation fails
@@ -157,7 +145,7 @@ namespace NWSWeather.Sample
 
             // Create the frame but don't set it as RootVisual yet; this allows the splash
             // screen to remain active until the application is ready to render.
-            RootFrame = new PhoneApplicationFrameEx();
+            RootFrame = new PhoneApplicationFrame();
             RootFrame.Navigated += CompleteInitializePhoneApplication;
 
             // Handle navigation failures

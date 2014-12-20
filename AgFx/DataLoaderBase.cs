@@ -3,18 +3,18 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-
-
 using System;
 using System.IO;
+using System.Threading;
 
-namespace AgFx {
-    
+namespace AgFx
+{
     /// <summary>
     /// Base generic class for DataLoaders
     /// </summary>
     /// <typeparam name="T">The LoadContext type, which derives from LoadContext</typeparam>
-    public abstract class DataLoaderBase<T> : IDataLoader<T> where T : LoadContext {
+    public abstract class DataLoaderBase<T> : IDataLoader<T> where T : LoadContext
+    {
 
         /// <summary>
         /// Retrieve the LoadRequest for this object type.
@@ -32,6 +32,5 @@ namespace AgFx {
         /// <param name="stream">The raw data returned from the fetch</param>
         /// <returns>An object which is of the type, or a derived type) of objectType.</returns>
         public abstract object Deserialize(T loadContext, Type objectType, Stream stream);
-
     }
 }

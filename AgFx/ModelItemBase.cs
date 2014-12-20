@@ -5,138 +5,125 @@
 
 
 using System;
-using System.Threading;
-using System.Windows.Threading;
 
 namespace AgFx
 {
     /// <summary>
-    /// Generic flavor of ModelItem base.
+    ///     Generic flavor of ModelItem base.
     /// </summary>
     /// <typeparam name="T">A type of LoadContext</typeparam>
-    public class ModelItemBase<T> : ModelItemBase where T : LoadContext {
-
+    public class ModelItemBase<T> : ModelItemBase where T : LoadContext
+    {
         /// <summary>
-        /// The typed LoadContext property to use with this model.
+        ///     Default constructor.
         /// </summary>
-        public new T LoadContext {
-            get {
-                return (T)base.LoadContext;
-            }
-            set {
-                base.LoadContext = value;
-            }
+        public ModelItemBase()
+        {
         }
 
         /// <summary>
-        /// Default constructor.
+        /// 
         /// </summary>
-        public ModelItemBase() {}
+        /// <param name="loadContext"></param>
+        public ModelItemBase(T loadContext)
+        {
+            LoadContext = loadContext;
+        }
 
         /// <summary>
-        /// Constructor that takes a LoadContext instance.
+        ///     The typed LoadContext property to use with this model.
         /// </summary>
-        /// <param name="loadContext">The LoadContext</param>
-        public ModelItemBase(T loadContext) : base(){
-            LoadContext = loadContext;
+        public new T LoadContext
+        {
+            get { return (T)base.LoadContext; }
+            set { base.LoadContext = value; }
         }
     }
 
+
     /// <summary>
-    /// ModelItem base is the base type to use with most objects processed by DataManager.
+    ///     ModelItem base is the base type to use with most objects processed by DataManager.
     /// </summary>
     public class ModelItemBase : NotifyPropertyChangedBase, IUpdatable
     {
-
-        private LoadContext _lc;
-
-        /// <summary>
-        /// The LoadContext for this item.
-        /// 
-        /// This property is essentially write-once.  It's value can be set once but not modified after
-        /// it has been set.
-        /// </summary>
-        public LoadContext LoadContext {
-            get {
-                return _lc;
-            }
-            set {
-                if (!Object.Equals(value, _lc)) {
-
-                    if (_lc != null) {
-                        throw new InvalidOperationException("Identity can not be changed.");
-                    }
-                    _lc = value;
-                    RaisePropertyChanged("LoadContext");
-                }                
-            }
-        }
-
-        /// <summary>
-        /// Default ctor.
-        /// </summary>
-        public ModelItemBase() : base(true)
-        {           
-        }
-
-        /// <summary>
-        /// Constructor that takes an identity value.  This value will be wrapped into a default LoadContext.
-        /// </summary>
-        /// <param name="id">The identity of this object, which cannot be null.</param>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
-        public ModelItemBase(object id) : this()
-        {
-            if (id == null) throw new ArgumentNullException();
-
-            LoadContext = new LoadContext(id);
-        }
-                
+        private DateTime _lastUpdated;
         private int _updateCount;
 
         /// <summary>
-        /// Thsi will be set to true when the object is in the process of updating. This property will notify
-        /// changes so it can be databound to.
+        /// Default parameterless contstructor
+        /// </summary>
+        public ModelItemBase()
+        {
+        }
+
+        /// <summary>
+        ///     Constructor that takes an identity value.  This value will be wrapped into a default LoadContext.
+        /// </summary>
+        public ModelItemBase(LoadContext loadContext)
+        {
+            LoadContext = loadContext;
+        }
+       
+        private LoadContext _loadContext;
+
+        /// <summary>
+        ///     The LoadContext for this item.
+        ///     This property is essentially write-once.  It's value can be set once but not modified after
+        ///     it has been set.
+        /// </summary>
+        public LoadContext LoadContext
+        {
+            get { return _loadContext; }
+            set
+            {
+                if(!Equals(value, _loadContext))
+                {
+                    if(_loadContext != null)
+                    {
+                        throw new InvalidOperationException("Identity can not be changed");
+                    }
+                    _loadContext = value;
+                    RaisePropertyChanged("LoadContext");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Thsi will be set to true when the object is in the process of updating. This property will notify
+        ///     changes so it can be databound to.
         /// </summary>
         public bool IsUpdating
         {
-            get
-            {
-                return _updateCount > 0;
-            }
+            get { return _updateCount > 0; }
             set
             {
-                bool updating = IsUpdating;
+                var updating = IsUpdating;
 
-                if (value)
+                if(value)
                 {
                     _updateCount++;
                 }
                 else
                 {
                     _updateCount = Math.Max(0, --_updateCount);
-                    
                 }
 
-                if (IsUpdating != updating)
-                {  
+                if(IsUpdating != updating)
+                {
                     RaisePropertyChanged("IsUpdating");
                 }
             }
         }
 
-        private DateTime _lastUpdated;
-
         /// <summary>
-        /// The time that the value for this object was last fetched.
+        ///     The time that the value for this object was last fetched.
         /// </summary>
         public DateTime LastUpdated
         {
-            get {
-                return _lastUpdated;
-            }
+            get { return _lastUpdated; }
             set
             {
-                if (_lastUpdated != value)
+                if(_lastUpdated != value)
                 {
                     _lastUpdated = value;
                     RaisePropertyChanged("LastUpdated");
@@ -145,47 +132,39 @@ namespace AgFx
         }
 
         /// <summary>
-        /// Update this object from the passed in source, typically by
-        /// copying properties.  Default implementation calls ReflectionSerializer.UpdateObject.
+        ///     Update this object from the passed in source, typically by
+        ///     copying properties.  Default implementation calls ReflectionSerializer.UpdateObject.
         /// </summary>
         /// <param name="source">The source instance to update from.</param>
         public virtual void UpdateFrom(object source)
         {
-            ReflectionSerializer.UpdateObject(source, this, false, null);           
+            // TODO: Use AutoMapper here?
+            ReflectionSerializer.CloneProperties(source, this);
         }
 
         /// <summary>
-        /// Initiate a refresh for this object.  Calls DataManager.Current.Refresh(this)
-        /// </summary>
-        public void Refresh()
-        {
-            DataManager.Current.Refresh(this);
-        }
-
-        /// <summary>
-        /// override
+        ///     override
         /// </summary>
         /// <param name="obj"></param>
         /// <returns></returns>
         public override bool Equals(object obj)
-        {            
-            ModelItemBase other = obj as ModelItemBase;
+        {
+            var other = obj as ModelItemBase;
             if (other == null) return false;
-            return Object.Equals(other.LoadContext, LoadContext);
+            return Equals(other.LoadContext, LoadContext);
         }
-        
+
         /// <summary>
-        /// override
+        ///     override
         /// </summary>
         /// <returns></returns>
         public override int GetHashCode()
         {
-            if (LoadContext != null) {
+            if (LoadContext != null)
+            {
                 return LoadContext.GetHashCode();
             }
             return base.GetHashCode();
         }
     }
-
-
 }

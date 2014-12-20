@@ -1,24 +1,17 @@
 ﻿using System;
-using System.Net;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Documents;
-using System.Windows.Ink;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Shapes;
-using Microsoft.Silverlight.Testing;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.IO;
+using Xunit;
 
 namespace AgFx.Test
 {
-    [TestClass]
+    // TODO: Add Update/CloneProperties tests
     public class ReflectionSerializerTests
     {
-        
-        private TestClass CreateTestClass() {
+        private static readonly string _data =
+            "AgFx.Test.ReflectionSerializerTests+TestClass\r\nString:blah%20blah%20blah%0D%0Ablah%20blah\r\nInt:1234\r\nDateTime:01%2F05%2F1997%2000%3A00%3A00\r\nDouble:1234.4321\r\nBool:True\r\n::\r\n";
+
+        private TestClass CreateTestClass()
+        {
             return new TestClass
             {
                 String = "blah blah blah\r\nblah blah",
@@ -29,34 +22,32 @@ namespace AgFx.Test
             };
         }
 
-        [TestMethod]
+        [Fact]
         public void TestSerialize()
         {
             var tc = CreateTestClass();
 
-            StringWriter sw = new StringWriter();
+            var sw = new StringWriter();
 
             ReflectionSerializer.Serialize(tc, sw);
 
-            string data = sw.ToString();
+            var data = sw.ToString();
 
 
-            Assert.AreEqual<string>(_data, data);
+            Assert.Equal<string>(_data, data);
         }
 
-        static string _data = "AgFx.Test.ReflectionSerializerTests+TestClass\r\nString:blah%20blah%20blah%0D%0Ablah%20blah\r\nInt:1234\r\nDateTime:01%2F05%2F1997%2000%3A00%3A00\r\nDouble:1234.4321\r\nBool:True\r\n::\r\n";
-
-        [TestMethod]
+        [Fact]
         public void TestDeserialize()
         {
-            TestClass tc = new TestClass();
-            TestClass resultClass = CreateTestClass();
+            var tc = new TestClass();
+            var resultClass = CreateTestClass();
 
-            Assert.AreNotEqual(tc, resultClass);
+            Assert.NotEqual(tc, resultClass);
 
             ReflectionSerializer.Deserialize(tc, new StringReader(_data));
 
-            Assert.AreEqual<TestClass>(resultClass, tc);
+            Assert.Equal(resultClass, tc);
         }
 
         public class TestClass
@@ -69,7 +60,7 @@ namespace AgFx.Test
 
             public override bool Equals(object obj)
             {
-                TestClass other = (TestClass)obj;
+                var other = (TestClass)obj;
 
                 return String == other.String &&
                        Int == other.Int &&
@@ -82,7 +73,6 @@ namespace AgFx.Test
             {
                 return base.GetHashCode();
             }
-
         }
     }
 }

@@ -1,319 +1,179 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Microsoft.Silverlight.Testing;
-using System.Threading;
-using System;
+﻿using System;
 using System.ComponentModel;
+using System.Threading;
+using System.Windows;
+using Xunit;
 
 namespace AgFx.Test
 {
-    [TestClass]
-    public class NotifyPropertyChangedBaseTests : WorkItemTest
+    public class NotifyPropertyChangedBaseTests
     {
-        [TestMethod]
-        public void TestChangedOnUIThread()
+        private const int AsynchronousTestTimeout = 5000;
+
+        [Fact]
+        public void ChangedOnNonUiThread_FiresPropertyChanged_OnUiThread()
         {
-            TestChanger tc = new TestChanger(false);
-            
-            bool gotChange = false;
+            var resetEvent = new ManualResetEvent(false);
 
-            tc.PropertyChanged += (s, a) =>
-            {
-                gotChange = true;
-            };
-
-            tc.TestProp = "xyz";
-
-            Assert.IsTrue(gotChange);
-        }
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestChangedOnNonUiThread() {
-            TestChanger tc = new TestChanger(true);
-            
-
-            var threadId = Thread.CurrentThread.ManagedThreadId;
+            var tc = new TestChanger();
 
             PropertyChangedEventHandler handler = null;
-            
-            handler = (s, a) =>
-             {
-                 Assert.AreEqual(threadId, Thread.CurrentThread.ManagedThreadId);
 
-                 tc.PropertyChanged -= handler;
-                 TestComplete();
-             };
+            handler = (s, a) =>
+            {
+                Assert.True(Deployment.Current.CheckAccess());
+
+                tc.PropertyChanged -= handler;
+                resetEvent.Set();
+            };
 
             tc.PropertyChanged += handler;
 
-            ThreadPool.QueueUserWorkItem((s) =>
-            {
-                tc.TestProp = "123";
-            }, null);
+            ThreadPool.QueueUserWorkItem(s => { tc.TestProp = "123"; }, null);
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestChangedSynchronousOnUiThread() {
-            TestChanger tc = new TestChanger(true);
-            
-            var threadId = Thread.CurrentThread.ManagedThreadId;
-
-            bool startFirstChagne = false;
-            bool finishFirstchange = false;
-            bool gotNestedChange = false;
-
-            PropertyChangedEventHandler hander = null;
-
-            hander = (s, a) =>
+        [Fact]
+        public void TestChangedSynchronousOnUiThread()
+        {
+            var resetEvent = new ManualResetEvent(false);
+            Deployment.Current.Dispatcher.BeginInvoke(() =>
             {
-                bool testComplete = false;
+                var tc = new TestChanger();
 
-                if (!startFirstChagne) {
-                    startFirstChagne = true;
-                    tc.TestProp = "again";
-                    finishFirstchange = true;
-                    if (!gotNestedChange) {
-                        Assert.Fail();
-                        testComplete = true;
-                    }
-                }
-                else if (!finishFirstchange) {
-                    gotNestedChange = true;
-                    Assert.AreEqual(threadId, Thread.CurrentThread.ManagedThreadId);
-                    testComplete = true;
-                }
-                else {
-                    Assert.Fail();
-                    testComplete = true;
-                }
+                var threadId = Thread.CurrentThread.ManagedThreadId;
 
-                if (testComplete) {
-                    tc.PropertyChanged -= hander;
-                    TestComplete();
-                }
-            };
+                var startFirstChange = false;
+                var finishFirstChange = false;
+                var gotNestedChange = false;
 
-            tc.PropertyChanged += hander;
+                PropertyChangedEventHandler hander = null;
 
-            ThreadPool.QueueUserWorkItem((s) =>
+                hander = (s, a) =>
                 {
-                    tc.TestProp = "123";
-                },
-                null
-            );
-        }
+                    if(!startFirstChange)
+                    {
+                        startFirstChange = true;
+                        tc.TestProp = "again";
+                        finishFirstChange = true;
+                        if(!gotNestedChange)
+                        {
+                            throw new InvalidOperationException();
+                        }
+                    }
+                    else if(!finishFirstChange)
+                    {
+                        gotNestedChange = true;
+                        Assert.Equal(threadId, Thread.CurrentThread.ManagedThreadId);
+                        tc.PropertyChanged -= hander;
+                        resetEvent.Set();
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException();
+                    }
+                };
 
-        [TestMethod]
-        public void TestDependantProperty() {
+                tc.PropertyChanged += hander;
 
-            TestChanger tc = new TestChanger();
-
-            bool gotDependantChange = false;
-
-            tc.PropertyChanged += (s, a) =>
-            {
-                gotDependantChange |= a.PropertyName == "DependentProp";
-            };
-
-            tc.TestProp = "changed";
-
-            Assert.IsTrue(gotDependantChange);
-        }
-
-        [TestMethod]
-        public void TestMultiDependantProperty() {
-
-            TestChanger tc = new TestChanger();
-
-            int notifyCount = 0;
-            
-            tc.PropertyChanged += (s, a) =>
-            {
-
-                if (a.PropertyName == "MultiDependentProp") {
-                    notifyCount++;
-                }
-                
-            };
-
-            tc.TestProp = "changed";
-            tc.TestProp2 = "changed";
-
-            Assert.AreEqual(2, notifyCount);
-        }
-
-        [TestMethod]
-        public void TestFakeDependantProperty() {
-
-            TestChanger tc = new TestChanger();
-
-            bool gotDependantChange = false;
-
-            tc.PropertyChanged += (s, a) =>
-            {
-                gotDependantChange |= a.PropertyName == "FakeDependentProp";
-            };
-
-            tc.NotifyFakeProperty("FakeProp");
-
-            Assert.IsTrue(gotDependantChange);
-        }
-
-        //[TestMethod]
-        //public void TestDeprecatedDependantProperty() {
-
-        //    TestChanger tc = new TestChanger(true);
-
-        //    bool gotDependantChange = false;
-
-        //    tc.PropertyChanged += (s, a) =>
-        //    {
-        //        gotDependantChange |= a.PropertyName == "NoAttributeDependentProp";
-        //    };
-
-        //    tc.TestProp = "changed";
-
-        //    Assert.IsTrue(gotDependantChange);
-        //}
-
-        [TestMethod]
-        public void TestBadPropertyDependency() {
-
-            try {
-                var tc = new TestChanger_Bad();                
-            }
-            catch (ArgumentException){
-                return;
-            }
-            Assert.Fail();
-        }
-
-        public class TestChanger_Bad : NotifyPropertyChangedBase {
-
-            [DependentOnProperty("Nada")]
-            public string SomeThing {
-                get;
-                set;
-            }
-        
+                ThreadPool.QueueUserWorkItem(s => { tc.TestProp = "123"; },
+                    null
+                    );
+            });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
         public class TestChanger : NotifyPropertyChangedBase
         {
+            private string _dependentProp;
+            private string _fakeProp;
+            private string _multidependentProp;
+            private string _oldProp;
+            private string _testProp;
+            private string _testProp2;
 
-            public TestChanger() : this(true) {                
-            }
-
-            public TestChanger(bool notifyOnUiThread) : base(notifyOnUiThread){
-                //AddDependentProperty("TestProp", "NoAttributeDependentProp");
-            }
-
-            #region Property TestProp
-            private string _TestProp;
-            public string TestProp
+            public string MultiDependentProp
             {
-                get
-                {
-                    return _TestProp;
-                }
+                get { return _multidependentProp; }
                 set
                 {
-                    if (_TestProp != value)
+                    if(_multidependentProp != value)
                     {
-                        _TestProp = value;
-                        RaisePropertyChanged("TestProp");
-                    }
-                }
-            }
-            #endregion
-
-            #region Property TestProp2
-            private string _TestProp2;
-            public string TestProp2 {
-                get {
-                    return _TestProp2;
-                }
-                set {
-                    if (_TestProp2 != value) {
-                        _TestProp2 = value;
-                        RaisePropertyChanged("TestProp2");
-                    }
-                }
-            }
-            #endregion
-
-            #region Property TestProp
-            private string _dependentProp;
-
-            [DependentOnProperty("TestProp")]
-            public string DependentProp {
-                get {
-                    return _dependentProp;
-                }
-                set {
-                    if (_dependentProp != value) {
-                        _dependentProp = value;
-                        RaisePropertyChanged("DependentProp");
-                    }
-                }
-            }
-            #endregion
-
-            private string _mulltidependentProp;
-
-            [DependentOnProperty("TestProp")]
-            [DependentOnProperty("TestProp2")]            
-            public string MultiDependentProp {
-                get {
-                    return _mulltidependentProp;
-                }
-                set {
-                    if (_mulltidependentProp != value) {
-                        _mulltidependentProp = value;
+                        _multidependentProp = value;
                         RaisePropertyChanged("MultiDependentProp");
                     }
                 }
             }
 
-            private string _fakeProp;
-
-            [DependentOnProperty(PrimaryPropertyName="FakeProp", IsNotARealPropertyName=true)]
-            public string FakeDependentProp {
-                get {
-                    return _fakeProp;
-                }
-                set {
-                    if (_fakeProp != value) {
+            public string FakeDependentProp
+            {
+                get { return _fakeProp; }
+                set
+                {
+                    if(_fakeProp != value)
+                    {
                         _fakeProp = value;
                         RaisePropertyChanged("FakeDependentProp");
                     }
                 }
             }
 
-            #region Property TestProp
-            private string _oldProp;
-
-            [DependentOnProperty("TestProp")]
-            public string NoAttributeDependentProp {
-                get {
-                    return _oldProp;
+            public string TestProp
+            {
+                get { return _testProp; }
+                set
+                {
+                    if(_testProp != value)
+                    {
+                        _testProp = value;
+                        RaisePropertyChanged("TestProp");
+                    }
                 }
-                set {
-                    if (_oldProp != value) {
+            }
+
+            public string TestProp2
+            {
+                get { return _testProp2; }
+                set
+                {
+                    if(_testProp2 != value)
+                    {
+                        _testProp2 = value;
+                        RaisePropertyChanged("TestProp2");
+                    }
+                }
+            }
+
+            public string DependentProp
+            {
+                get { return _dependentProp; }
+                set
+                {
+                    if(_dependentProp != value)
+                    {
+                        _dependentProp = value;
+                        RaisePropertyChanged("DependentProp");
+                    }
+                }
+            }
+
+            public string NoAttributeDependentProp
+            {
+                get { return _oldProp; }
+                set
+                {
+                    if(_oldProp != value)
+                    {
                         _oldProp = value;
                         RaisePropertyChanged("NoAttributeDependentProp");
                     }
                 }
             }
-            #endregion
 
-            public void NotifyFakeProperty(string name) {
+            public void NotifyFakeProperty(string name)
+            {
                 RaisePropertyChanged(name);
             }
-
-
-
         }
     }
 }

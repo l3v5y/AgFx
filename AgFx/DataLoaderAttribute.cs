@@ -4,8 +4,6 @@
 // Please see http://www.apache.org/licenses/LICENSE-2.0 for details.
 // All other rights reserved.
 
-
-
 using System;
 
 namespace AgFx

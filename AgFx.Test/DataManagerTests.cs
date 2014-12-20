@@ -1,1300 +1,768 @@
 ﻿using System;
-using Microsoft.Silverlight.Testing;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.IO;
-using System.Threading;
-using System.Windows.Threading;
 using System.ComponentModel;
-using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Text;
+using System.Threading;
+using System.Windows;
+using AgFx.Test.TestModels;
+using Xunit;
 
-namespace AgFx.Test {
-    [TestClass]
-    public class DataManagerTests : WorkItemTest {
+// ReSharper disable SpecifyACultureInStringConversionExplicitly
 
-        [TestInitialize]
-        public void Initialize() {
-            DataManager.Current.DeleteCache();
+namespace AgFx.Test
+{
+    public class DataManagerTests
+    {
+        private const int AsynchronousTestTimeout = 5000;
+
+        [Fact]
+        public void Load_NoDataLoader_ThrowsInvalidOperationException()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            Assert.Throws(typeof(InvalidOperationException), () => dataManager.Load<ModelItemBase>("foo"));
         }
 
-        [TestCleanup]
-        public void Cleanup() {
-            DataManager.Current.DeleteCache();
-        }
-
-
-
-
-
-        [TestMethod]
-        public void TestNoDataLoader() {
-
-            try {
-                DataManager.Current.Load<object>("foo");
-            }
-            catch (InvalidOperationException) {
-                return;
-            }
-            Assert.Fail();
-        }
-
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestLoad() {
-            DataManager.Current.Load<ShortCacheObject>(ShortCacheObject.DefaultIdentifier,
-                (obj) =>
+        [Fact]
+        public void Load_ShortCacheObject_LoadsSuccessfully()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            dataManager.Load<ShortCacheObject>(ShortCacheObject.DefaultIdentifier,
+                obj =>
                 {
-                    Assert.AreEqual(ShortCacheObject.DefaultStringValue, obj.StringProp);
-                    Assert.AreEqual(ShortCacheObject.DefaultIntValue, obj.IntProp);
-                    TestComplete();
+                    Assert.Equal(ShortCacheObject.DefaultStringValue, obj.StringProp);
+                    Assert.Equal(ShortCacheObject.DefaultIntValue, obj.IntProp);
+                    resetEvent.Set();
                 },
-                (ex) =>
-                {
-                    Assert.Fail(ex.Message);
-                    TestComplete();
-                }
-            );
+                ex => { throw new InvalidOperationException(ex.Message); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        public void TestLoadFromCache() {
+        [Fact]
+        public void LoadFromCache_LoadsCacheObject()
+        {
+            var storeProvider = new InMemoryStoreProvider();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
 
-            // populate the cache with an item.
-            //
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), new LoadContext("LFC"));
+            var loadContext = new LoadContext("LFC");
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), loadContext);
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddHours(1));
-            DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream("LoadFromCache", -1).GetBuffer());
-            Thread.Sleep(250); // let the write happen;
-            // sync load that value.
-            //
-            var value = DataManager.Current.LoadFromCache<ShortCacheObject>("LFC");
+            storeProvider.Write(cii,
+                ShortCacheObject.ShortCacheObjectLoadRequest.WriteToStream("LoadFromCache", -1).GetBuffer());
 
-            Assert.AreEqual("LoadFromCache", value.StringProp);
-            Assert.AreEqual(-1, value.IntProp);
+
+            var value = dataManager.LoadFromCache<ShortCacheObject>(loadContext);
+            Assert.Equal("LoadFromCache", value.StringProp);
+            Assert.Equal(-1, value.IntProp);
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestRefreshBeforeCacheExpires() {
-            IUpdatable val = null;
-            LoadContext lc = new LoadContext(ShortCacheObject.DefaultIdentifier);
+        [Fact]
+        public void TestRefreshBeforeCacheExpires()
+        {
+            var storeProvider = new InMemoryStoreProvider();
+            storeProvider.Delete();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            var loadContext = new LoadContext(ShortCacheObject.DefaultIdentifier);
             // write the cache entry
             //
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), lc);
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), loadContext);
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddHours(1));
-            var t = DateTime.Now.ToString();
-            DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream(t, -1).GetBuffer());
+            var time = DateTime.Now.ToString();
+            storeProvider.Write(cii, ShortCacheObject.ShortCacheObjectLoadRequest.WriteToStream(time, -1).GetBuffer());
 
-            val = DataManager.Current.Load<ShortCacheObject>(lc,
-                 (v) =>
-                 {
+            var valueReference = dataManager.Load<ShortCacheObject>(loadContext,
+                v =>
+                {
+                    var oldDefault = ShortCacheObject.DefaultStringValue;
+                    // we've got a value
+                    Assert.Equal(time, v.StringProp);
+                    ShortCacheObject.DefaultStringValue = DateTime.Now.ToString();
 
-                     string oldDefault = ShortCacheObject.DefaultStringValue;
-                     // we've got a value
-                     Assert.AreEqual(t, v.StringProp);
-                     ShortCacheObject.DefaultStringValue = DateTime.Now.ToString();
-
-                     // now request a new value via refresh.
-                     //
-                     DataManager.Current.Refresh<ShortCacheObject>(ShortCacheObject.DefaultIdentifier,
-                         (v2) =>
-                         {
-                             Assert.AreEqual(v2.StringProp, ShortCacheObject.DefaultStringValue);
-                             ShortCacheObject.DefaultStringValue = oldDefault;
-                             TestComplete();
-                         },
-                         (ex2) =>
-                         {
-                             Assert.Fail(ex2.Message);
-                             TestComplete();
-                         }
-
-                     );
-
-                 },
-                 (ex) =>
-                 {
-                     Assert.Fail(ex.Message);
-                     TestComplete();
-                 });
+                    // now request a new value via refresh.
+                    //
+                    dataManager.Refresh<ShortCacheObject>(loadContext,
+                        v2 =>
+                        {
+                            Assert.Equal(v2.StringProp, ShortCacheObject.DefaultStringValue);
+                            ShortCacheObject.DefaultStringValue = oldDefault;
+                            resetEvent.Set();
+                        },
+                        ex2 => { throw new InvalidOperationException(ex2.Message); });
+                },
+                ex => { throw new InvalidOperationException(ex.Message); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+            Assert.NotNull(valueReference);
         }
 
-        [TestMethod]
-        [Asynchronous]
+        [Fact]
         public void TestRefreshWithValidCache()
         {
-            
-
-            IUpdatable val = null;
-            LoadContext lc = new LoadContext(ShortCacheObject.DefaultIdentifier);
-            DataManager.Current.Clear<ShortCacheObject>(lc);
+            var storeProvider = new InMemoryStoreProvider();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            var loadContext = new LoadContext(ShortCacheObject.DefaultIdentifier);
             // write the cache entry
             //
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), lc);
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), loadContext);
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddMinutes(1));
             var t = DateTime.Now.ToString();
-            DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream(t, -1).GetBuffer());
+            storeProvider.Write(cii, ShortCacheObject.ShortCacheObjectLoadRequest.WriteToStream(t, -1).GetBuffer());
 
-            string oldDefault = ShortCacheObject.DefaultStringValue;
-            ShortCacheObject.DefaultStringValue = DateTime.Now.Ticks.ToString();        
+            var oldDefault = ShortCacheObject.DefaultStringValue;
+            ShortCacheObject.DefaultStringValue = DateTime.Now.Ticks.ToString();
 
-            val = DataManager.Current.Refresh<ShortCacheObject>(lc,
-                 (v) =>
-                 {
-                    
-                     // we've got a value
-                     Assert.AreEqual(ShortCacheObject.DefaultStringValue, v.StringProp);
-                     ShortCacheObject.DefaultStringValue = oldDefault;
-                     TestComplete();
-                 },
-                 (ex) =>
-                 {
-                     Assert.Fail(ex.Message);
-                     TestComplete();
-                 });
+            dataManager.Refresh<ShortCacheObject>(loadContext,
+                v =>
+                {
+                    // we've got a value
+                    Assert.Equal(ShortCacheObject.DefaultStringValue, v.StringProp);
+                    ShortCacheObject.DefaultStringValue = oldDefault;
+                    resetEvent.Set();
+                },
+                ex => { throw new InvalidOperationException(ex.Message); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestInvalidateFromCache() {
+        [Fact]
+        public void TestInvalidateFromCache()
+        {
+            var storeProvider = new InMemoryStoreProvider();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
+            var loadContext = new LoadContext("InvalidateFromCache");
 
-            LoadContext lc = new LoadContext("InvalidateFromCache");
             var time = DateTime.Now.ToString();
 
             // write the cache entry
             //
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), lc);
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), loadContext);
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddHours(1));
-            DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream(time, -1).GetBuffer());
+            storeProvider.Write(cii, ShortCacheObject.ShortCacheObjectLoadRequest.WriteToStream(time, -1).GetBuffer());
 
-            Thread.Sleep(250);
-
-            TestInvalidateCore(lc, time);
-
+            TestInvalidateCore(dataManager, loadContext, time);
         }
 
-        private void TestInvalidateCore(LoadContext lc, string time) {
+        [Fact]
+        public void TestInvalidateFromLive()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var loadContext = new LoadContext("InvalidateFromLive");
+
+            ShortCacheObject.DefaultStringValue = DateTime.Now.ToString();
+
+            TestInvalidateCore(dataManager, loadContext, ShortCacheObject.DefaultStringValue);
+        }
+
+        private void TestInvalidateCore(DataManager dataManager, LoadContext lc, string time)
+        {
+            var resetEvent = new ManualResetEvent(false);
             // load it
             //
-            DataManager.Current.Load<ShortCacheObject>(lc,
-                (sco) =>
+            dataManager.Load<ShortCacheObject>(lc,
+                sco =>
                 {
                     // verify we got the right thing
                     //
-                    Assert.AreEqual(time, sco.StringProp);
+                    Assert.Equal(time, sco.StringProp);
 
                     // load again to verify it's not going to change
-                    DataManager.Current.Load<ShortCacheObject>(lc,
-                        (sco2) =>
+                    dataManager.Load<ShortCacheObject>(lc,
+                        sco2 =>
                         {
-
                             // verify we got the right thing
                             //
-                            Assert.AreEqual(time, sco2.StringProp);
+                            Assert.Equal(time, sco2.StringProp);
 
                             // invalidate it
                             //
-                            DataManager.Current.Invalidate<ShortCacheObject>(lc);
+                            dataManager.Invalidate<ShortCacheObject>(lc);
 
-                            Thread.Sleep(250);
+                            Assert.Equal(time, sco.StringProp);
 
-                            Assert.AreEqual(time, sco.StringProp);
-
-                            if (time == ShortCacheObject.DefaultStringValue) {
+                            if(time == ShortCacheObject.DefaultStringValue)
+                            {
                                 ShortCacheObject.DefaultStringValue = "DefaultString";
                             }
 
                             // load again to verify it's changed.
-                            DataManager.Current.Load<ShortCacheObject>(lc,
-                                (sco3) =>
+                            dataManager.Load<ShortCacheObject>(lc,
+                                sco3 =>
                                 {
-
                                     // verify we got the right thing
                                     //
-                                    Assert.AreNotEqual(time, sco3.StringProp);
+                                    Assert.NotEqual(time, sco3.StringProp);
 
                                     ShortCacheObject.DefaultStringValue = "DefaultString";
-                                    TestComplete();
-
+                                    resetEvent.Set();
                                 },
-                                (ex) =>
+                                ex =>
                                 {
-                                    Assert.Fail(ex.ToString());
                                     ShortCacheObject.DefaultStringValue = "DefaultString";
-                                    TestComplete();
+                                    throw new InvalidOperationException();
                                 });
-
-
                         },
-                        (ex) =>
+                        ex =>
                         {
-                            Assert.Fail(ex.ToString());
                             ShortCacheObject.DefaultStringValue = "DefaultString";
-                            TestComplete();
+                            throw new InvalidOperationException();
                         });
-
                 },
-                (ex) =>
-                {
-                    Assert.Fail(ex.ToString());
-                    TestComplete();
-                }
-                );
+                ex => { throw new InvalidOperationException(); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout*2));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestInvalidateFromLive() {
-            LoadContext lc = new LoadContext("InvalidateFromLive");
-            DataManager.Current.Clear<ShortCacheObject>(lc);
-            var time = DateTime.Now.ToString();
-
-            ShortCacheObject.DefaultStringValue = DateTime.Now.ToString();
-
-
-            TestInvalidateCore(lc, ShortCacheObject.DefaultStringValue);
-        }
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestRefreshOfLoadFail() {
+        [Fact]
+        public void TestRefreshOfLoadFail()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
             ShortCacheObject val = null;
 
             ShortCacheObject.FailDeserializeMessage = "expected fail.";
 
-            ShortCacheObject.SCOLoadRequest.Error = new InvalidCastException();
+            ShortCacheObject.ShortCacheObjectLoadRequest.Error = new InvalidCastException();
 
+            val = dataManager.Load<ShortCacheObject>(ShortCacheObject.DefaultIdentifier,
+                v =>
+                {
+                    ShortCacheObject.ShortCacheObjectLoadRequest.Error = null;
+                    throw new InvalidOperationException();
+                },
+                ex =>
+                {
+                    var oldDefault = ShortCacheObject.DefaultStringValue;
 
-            val = DataManager.Current.Load<ShortCacheObject>(ShortCacheObject.DefaultIdentifier,
-                 (v) =>
-                 {
-                     ShortCacheObject.SCOLoadRequest.Error = null;
-                     Assert.Fail("Load should have failed.");
-                     TestComplete();
+                    Assert.NotEqual(val.StringProp, oldDefault);
+                    ShortCacheObject.DefaultStringValue = DateTime.Now.ToString();
 
-                 },
-                 (ex) =>
-                 {
+                    ShortCacheObject.FailDeserializeMessage = null;
+                    ShortCacheObject.ShortCacheObjectLoadRequest.Error = null;
 
-                     string oldDefault = ShortCacheObject.DefaultStringValue;
-
-                     // we should not get a value.
-                     //
-                     Assert.AreNotEqual(val.StringProp, oldDefault);
-                     ShortCacheObject.DefaultStringValue = DateTime.Now.ToString();
-
-                     ShortCacheObject.FailDeserializeMessage = null;
-                     ShortCacheObject.SCOLoadRequest.Error = null;
-
-                     // now request a new value via refresh.
-                     //
-                     DataManager.Current.Refresh<ShortCacheObject>(ShortCacheObject.DefaultIdentifier,
-                         (v2) =>
-                         {
-                             Assert.AreEqual(v2.StringProp, ShortCacheObject.DefaultStringValue);
-                             ShortCacheObject.DefaultStringValue = oldDefault;
-                             TestComplete();
-                         },
-                         (ex2) =>
-                         {
-                             Assert.Fail(ex2.Message);
-                             TestComplete();
-                         }
-
-                     );
-
-
-                 });
+                    dataManager.Refresh<ShortCacheObject>(ShortCacheObject.DefaultIdentifier,
+                        v2 =>
+                        {
+                            Assert.Equal(v2.StringProp, ShortCacheObject.DefaultStringValue);
+                            ShortCacheObject.DefaultStringValue = oldDefault;
+                            resetEvent.Set();
+                        },
+                        ex2 => { throw new InvalidOperationException(ex2.Message); });
+                });
+            resetEvent.WaitOne();
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout*2));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestLoadWithExpiredCache() {
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), new LoadContext("ExpiredItem"));
-            var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddSeconds(-10));
-            DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream("ExpiredItemValue", -1).GetBuffer());
-            Thread.Sleep(100); // let the write happen;
+        [Fact]
+        public void Load_WithExpiredCache_FetchesCachedVersion()
+        {
+            var storeProvider = new InMemoryStoreProvider();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
+            var hasLoaded = false;
+
+            var resetEvent = new ManualResetEvent(false);
+            var loadContext = new LoadContext("ExpiredItem");
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), loadContext);
+            var cacheItemInfo = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddSeconds(-10));
+            storeProvider.Write(cacheItemInfo,
+                ShortCacheObject.ShortCacheObjectLoadRequest.WriteToStream("ExpiredItemValue", -1).GetBuffer());
             // slow down the load so we get the cache value.
             //
-            var oldTime = ShortCacheObject.SCOLoadRequest.LoadTimeMs;
-            ShortCacheObject.SCOLoadRequest.LoadTimeMs = 1000;
+            var oldTime = ShortCacheObject.ShortCacheObjectLoadRequest.LoadTimeMs;
+            ShortCacheObject.ShortCacheObjectLoadRequest.LoadTimeMs = 1000;
 
-            DataManager.Current.Load<ShortCacheObject>("ExpiredItem",
-                (v) =>
+            dataManager.Load<ShortCacheObject>(loadContext,
+                shortCacheObject =>
                 {
-                    ShortCacheObject.SCOLoadRequest.LoadTimeMs = oldTime;
-                    Assert.IsNotNull(v);
-                    Assert.AreEqual("ExpiredItemValue", v.StringProp);
-                    TestComplete();
-                },
-                (ex) =>
-                {
-                    Assert.Fail(ex.Message);
-                    TestComplete();
-                });
-        }
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestLoadRequestError() {
-            ShortCacheObject.SCOLoadRequest.Error = new Exception("blah");
-
-
-            DataManager.Current.Load<ShortCacheObject>("LoadEror",
-               (v) =>
-               {
-                   Assert.Fail("This should have failed");
-                   TestComplete();
-               },
-               (ex) =>
-               {
-                   Assert.IsNotNull(ex);
-                   Assert.AreEqual(ShortCacheObject.SCOLoadRequest.Error, ex.InnerException);
-                   ShortCacheObject.SCOLoadRequest.Error = null;
-                   TestComplete();
-               });
-        }
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestLoadRequestErrorUnhandled() {
-            ShortCacheObject.SCOLoadRequest.Error = new Exception("blah");
-
-
-            EventHandler<System.Windows.ApplicationUnhandledExceptionEventArgs> handler = null;
-
-            handler = (sender, e) =>
-            {
-                DataManager.Current.UnhandledError -= handler;
-                Assert.IsNotNull(e.ExceptionObject);
-                Assert.AreEqual(ShortCacheObject.SCOLoadRequest.Error, e.ExceptionObject.InnerException);
-                ShortCacheObject.SCOLoadRequest.Error = null;
-
-                PriorityQueue.AddUiWorkItem(() => TestComplete(), true);
-
-                e.Handled = true;
-            };
-
-            DataManager.Current.UnhandledError += handler;
-
-            DataManager.Current.Load<ShortCacheObject>("LoadEror",
-               (v) =>
-               {
-                   Assert.Fail("This should have failed");
-                   TestComplete();
-               },
-               null
-            );
-
-        }
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestUpdating() {
-            DataManager.Current.Load<ShortCacheObject>("Updating",
-                (s) =>
-                {
-                    Assert.IsFalse(s.IsUpdating);
-
-                    PropertyChangedEventHandler h = null;
-
-                    bool gotUpdatingTrue = false;
-                    bool gotUpdatingFalse = false;
-
-                    h = (sender, prop) =>
+                    // This prevents the live load from causing an assertion/test failure
+                    if(hasLoaded)
                     {
-                        if (prop.PropertyName == "IsUpdating") {
-                            if (!gotUpdatingTrue) {
-                                Assert.IsTrue(s.IsUpdating);
-                                gotUpdatingTrue = true;
-                            }
-                            else if (!gotUpdatingFalse) {
-                                Assert.IsFalse(s.IsUpdating);
-                                gotUpdatingFalse = true;
-                                s.PropertyChanged -= h;
-                            }
-                            else {
-                                Assert.Fail();
-                            }
-                        }
-
-                    };
-
-                    s.PropertyChanged += h;
-
-                    DataManager.Current.Refresh<ShortCacheObject>("Updating",
-                        (s2) =>
-                        {
-                            Assert.IsFalse(s.IsUpdating);
-                            if (!gotUpdatingTrue || !gotUpdatingFalse) {
-                                Assert.Fail();
-                            }
-
-                            TestComplete();
-                        },
-                        null
-                        );
-
+                        return;
+                    }
+                    hasLoaded = true;
+                    Debug.WriteLine("Asserting over ExpiredItemValue");
+                    Assert.Equal("ExpiredItemValue", shortCacheObject.StringProp);
+                    resetEvent.Set();
                 },
-                null
-            );
+                exception => { throw new InvalidOperationException(exception.Message); });
+
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+            ShortCacheObject.ShortCacheObjectLoadRequest.LoadTimeMs = oldTime;
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestDesrializeFail() {
-            string id = "DeserializeFail";
-            DataManager.Current.Clear<ShortCacheObject>(id);
-            string msg = DateTime.Now.ToString();
-
-            ShortCacheObject.FailDeserializeMessage = msg;
-            DataManager.Current.Load<ShortCacheObject>(id,
-                (sco) =>
+        [Fact]
+        public void TestLoadRequestError()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            ShortCacheObject.ShortCacheObjectLoadRequest.Error = new Exception("blah");
+            dataManager.Load<ShortCacheObject>("LoadEror",
+                v => { throw new InvalidOperationException(); },
+                ex =>
                 {
-                    ShortCacheObject.FailDeserializeMessage = null;
-                    Assert.Fail();
-                    TestComplete();
-                },
-                (ex) =>
-                {
-                    ShortCacheObject.FailDeserializeMessage = null;
-                    Assert.AreEqual(msg, ex.Message);
-                    TestComplete();
-                }
-            );
+                    Assert.Equal(ShortCacheObject.ShortCacheObjectLoadRequest.Error, ex.InnerException);
+                    ShortCacheObject.ShortCacheObjectLoadRequest.Error = null;
+                    resetEvent.Set();
+                });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestDeserializeFailUnhandled() {
-            string id = "DeserializeFail";
-            DataManager.Current.Clear<ShortCacheObject>(id);
-            string msg = DateTime.Now.ToString();
+        [Fact]
+        public void TestLoadRequestErrorUnhandled()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            ShortCacheObject.ShortCacheObjectLoadRequest.Error = new Exception("blah");
 
-            ShortCacheObject.FailDeserializeMessage = msg;
-
-            EventHandler<System.Windows.ApplicationUnhandledExceptionEventArgs> handler = null;
+            EventHandler<ApplicationUnhandledExceptionEventArgs> handler = null;
 
             handler = (sender, e) =>
             {
-                DataManager.Current.UnhandledError -= handler;
-                ShortCacheObject.FailDeserializeMessage = null;
-                Assert.AreEqual(msg, e.ExceptionObject.Message);
-
-                PriorityQueue.AddUiWorkItem(() => TestComplete(), true);
+                dataManager.UnhandledError -= handler;
+                Assert.NotNull(e.ExceptionObject);
+                Assert.Equal(ShortCacheObject.ShortCacheObjectLoadRequest.Error, e.ExceptionObject.InnerException);
+                ShortCacheObject.ShortCacheObjectLoadRequest.Error = null;
 
                 e.Handled = true;
+                resetEvent.Set();
             };
 
-            DataManager.Current.UnhandledError += handler;
+            dataManager.UnhandledError += handler;
 
-            DataManager.Current.Load<ShortCacheObject>(id,
-                (sco) =>
-                {
-                    ShortCacheObject.FailDeserializeMessage = null;
-                    Assert.Fail();
-                    TestComplete();
-                },
-                null
-            );
+            dataManager.Load<ShortCacheObject>("LoadEror",
+                v => { throw new InvalidOperationException(); },
+                null);
+
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestDeserializeCacheFail() {
-            string id = "DeserializeCacheFail";
+        [Fact]
+        public void TestRefreshingObjectChangesIsUpdatingFlagsCorrectly()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new AutoResetEvent(false);
 
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), new LoadContext(id));
+            var updatingChangedToTrue = false;
+            var updatingChangedToFalse = false;
+
+            var shortCacheObject = dataManager.Refresh<ShortCacheObject>("Updating",
+                s => { resetEvent.Set(); }, null);
+            resetEvent.WaitOne();
+
+            PropertyChangedEventHandler h = (sender, prop) =>
+            {
+                if(prop.PropertyName == "IsUpdating")
+                {
+                    if(!updatingChangedToTrue)
+                    {
+                        Assert.True(shortCacheObject.IsUpdating);
+                        updatingChangedToTrue = true;
+                    }
+                    else if(!updatingChangedToFalse)
+                    {
+                        Assert.False(shortCacheObject.IsUpdating);
+                        updatingChangedToFalse = true;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException();
+                    }
+                }
+            };
+
+            shortCacheObject.PropertyChanged += h;
+            dataManager.Refresh<ShortCacheObject>(shortCacheObject.LoadContext,
+                s2 =>
+                {
+                    Assert.False(shortCacheObject.IsUpdating);
+                    resetEvent.Set();
+                },
+                null);
+
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+            shortCacheObject.PropertyChanged -= h;
+        }
+
+        [Fact]
+        public void TestDeserializeFail()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+
+            var resetEvent = new ManualResetEvent(false);
+
+            const string id = "DeserializeFail";
+            var msg = DateTime.Now.ToString();
+
+            ShortCacheObject.FailDeserializeMessage = msg;
+            dataManager.Load<ShortCacheObject>(id,
+                sco =>
+                {
+                    ShortCacheObject.FailDeserializeMessage = null;
+                    throw new InvalidOperationException();
+                },
+                ex =>
+                {
+                    ShortCacheObject.FailDeserializeMessage = null;
+                    Assert.Equal(msg, ex.Message);
+                    resetEvent.Set();
+                });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+        }
+
+        [Fact]
+        public void TestDeserializeFailUnhandled()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+
+            const string id = "DeserializeFail";
+            var msg = DateTime.Now.ToString();
+
+            ShortCacheObject.FailDeserializeMessage = msg;
+
+            EventHandler<ApplicationUnhandledExceptionEventArgs> handler = null;
+
+            handler = (sender, e) =>
+            {
+                dataManager.UnhandledError -= handler;
+                ShortCacheObject.FailDeserializeMessage = null;
+                Assert.Equal(msg, e.ExceptionObject.Message);
+                e.Handled = true;
+                resetEvent.Set();
+            };
+
+            dataManager.UnhandledError += handler;
+
+            dataManager.Load<ShortCacheObject>(id,
+                sco =>
+                {
+                    ShortCacheObject.FailDeserializeMessage = null;
+                    throw new InvalidOperationException();
+                },
+                null
+                );
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+        }
+
+        [Fact]
+        public void TestDeserializeCacheFail()
+        {
+            var storeProvider = new InMemoryStoreProvider();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
+
+            var resetEvent = new ManualResetEvent(false);
+
+            var loadContext = new LoadContext("DeserializeCacheFail");
+
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(ShortCacheObject), loadContext);
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddSeconds(10));
 
-            MemoryStream ms = new MemoryStream();
+            var ms = new MemoryStream();
             var data = Encoding.UTF8.GetBytes("garbage");
             ms.Write(data, 0, data.Length);
-            DataManager.StoreProvider.Write(cii, data);
+            storeProvider.Write(cii, data);
 
             var val = (int)DateTime.Now.Ticks;
 
             ShortCacheObject.DefaultIntValue = val;
 
-            DataManager.Current.Load<ShortCacheObject>(id,
-                (sco) =>
+            dataManager.Load<ShortCacheObject>(loadContext,
+                sco =>
                 {
                     ShortCacheObject.DefaultIntValue = 1234;
-                    Assert.AreEqual(val, sco.IntProp);
-                    TestComplete();
+                    Assert.Equal(val, sco.IntProp);
+                    resetEvent.Set();
                 },
-                (ex) =>
+                ex => { throw new InvalidOperationException(); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+        }
+
+        [Fact]
+        public void TestDataLoaderLiveLoad()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+
+            var resetEvent = new ManualResetEvent(false);
+            var dateValue = DateTime.Now.ToString();
+            dataManager.Load<TestPoco>(dateValue,
+                tp =>
                 {
-
-                    Assert.Fail();
-                    TestComplete();
-                }
-            );
+                    Assert.Equal(dateValue, tp.Value);
+                    resetEvent.Set();
+                },
+                ex => { throw new InvalidOperationException(); }
+                );
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestDataLoaderLiveLoad() {
-            var dval = DateTime.Now.ToString();
-            DataManager.Current.Load<TestPoco>(dval,
-                 (tp) =>
-                 {
-                     Assert.AreEqual(dval, tp.Value);
-                     TestComplete();
-                 },
-                 (ex) =>
-                 {
-                     Assert.Fail();
-                     TestComplete();
-                 }
-            );
-        }
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestCleanup() {
+        [Fact]
+        public void TestCleanup()
+        {
+            var storeProvider = new InMemoryStoreProvider();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
 
             var dval = DateTime.Now.ToString();
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(TestPoco), new LoadContext("foo"));
-            DateTime timestamp = DateTime.Now.AddDays(-2);
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(TestPoco), new LoadContext("foo"));
+            var timestamp = DateTime.Now.AddDays(-2);
             var cii = new CacheItemInfo(uniqueName, timestamp, timestamp);
-            DataManager.StoreProvider.Write(cii, UTF8Encoding.UTF8.GetBytes(dval));
+            storeProvider.Write(cii, Encoding.UTF8.GetBytes(dval));
 
-            DataManager.Current.Cleanup(DateTime.Now.AddDays(-1),
-                () =>
-                {
-                    var item = DataManager.StoreProvider.GetLastestExpiringItem(uniqueName);
-                    Assert.IsNull(item);
-                    TestComplete();
-                }
-             );
-
-            
+            dataManager.Cleanup(DateTime.Now.AddDays(-1));
+            var item = storeProvider.GetItem(uniqueName);
+            Assert.Null(item);
         }
-        
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestDataLoaderCacheLoad() {
-            var id = "TestPocoCache";
+        [Fact]
+        public void TestDataLoaderCacheLoad()
+        {
+            var storeProvider = new InMemoryStoreProvider();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
+
+            var resetEvent = new ManualResetEvent(false);
+            var loadContext = new LoadContext("TestPocoCache");
             var dval = DateTime.Now.ToString();
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(TestPoco), new LoadContext(id));
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(TestPoco), loadContext);
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddSeconds(10));
-            DataManager.StoreProvider.Write(cii, UTF8Encoding.UTF8.GetBytes(dval));
-            Thread.Sleep(250); // let the write happen;
-            DataManager.Current.Load<TestPoco>(id,
-                (tp2) =>
+            storeProvider.Write(cii, Encoding.UTF8.GetBytes(dval));
+
+            dataManager.Load<TestPoco>(loadContext,
+                tp2 =>
                 {
-                    Assert.AreEqual(dval, tp2.Value);
-                    TestComplete();
+                    Assert.Equal(dval, tp2.Value);
+                    resetEvent.Set();
                 },
-                (ex) =>
-                {
-                    Assert.Fail();
-                    TestComplete();
-                }
-           );
+                ex => { throw new InvalidOperationException(ex.Message); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-
-        [DataLoader(typeof(TestDataLoader))]
-        public class TestPoco {
-            public string Value { get; set; }
-        }
-
-        public class TestPocoDerived : TestPoco {
-            
-        }
-
-
-        public class TestDataLoader : IDataLoader<LoadContext> {
-            public static string DeserializeValue = "DefaultDeserializeValue";
-
-
-            public LoadRequest GetLoadRequest(LoadContext identifier, Type objectType) {
-                return new TestDataLoaderRequest(identifier, identifier.Identity.ToString());
-            }
-
-            public object Deserialize(LoadContext identifier, Type objectType, Stream stream) {
-                StreamReader sr = new StreamReader(stream);
-
-                string val = sr.ReadToEnd();
-
-                if (typeof(TestPoco).IsAssignableFrom(objectType)) {
-                    var p = (TestPoco)Activator.CreateInstance(objectType);
-                    p.Value = val;
-                    return p;
-                }
-
-                throw new InvalidOperationException();
-            }
-
-            public class TestDataLoaderRequest : LoadRequest {
-                string val;
-
-                public TestDataLoaderRequest(LoadContext lc, string v)
-                    : base(lc) {
-                    val = v;
-                }
-                public override void Execute(Action<LoadRequestResult> result) {
-                    MemoryStream ms = new MemoryStream();
-
-                    StreamWriter sw = new StreamWriter(ms);
-                    sw.Write(val);
-                    sw.Flush();
-
-                    ms.Seek(0, SeekOrigin.Begin);
-
-                    LoadRequestResult lrr = new LoadRequestResult(ms);
-                    result(lrr);
-                }
-            }
-        }
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestNoCacheObject() {
+        [Fact]
+        public void TestNoCacheObject()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
             var strValue = DateTime.Now.ToString();
 
             ShortCacheObject.DefaultStringValue = strValue;
 
-            DataManager.Current.Load<NoCacheObject>("nco",
-            (v1) =>
-            {
-                Assert.AreEqual(strValue, v1.StringProp);
+            dataManager.Load<NoCacheObject>("nco",
+                v1 =>
+                {
+                    Assert.Equal(strValue, v1.StringProp);
 
-                strValue = DateTime.Now.ToString();
-                ShortCacheObject.DefaultStringValue = strValue;
+                    strValue = DateTime.Now.ToString();
+                    ShortCacheObject.DefaultStringValue = strValue;
 
-                DataManager.Current.Load<NoCacheObject>("nco",
-                    (v2) =>
-                    {
-
-                        Assert.AreEqual(strValue, v2.StringProp);
-                        TestComplete();
-                    },
-                    (ex2) =>
-                    {
-                        Assert.Fail();
-                        TestComplete();
-                    });
-
-
-            },
-            (ex) =>
-            {
-                Assert.Fail();
-                TestComplete();
-            });
+                    dataManager.Load<NoCacheObject>("nco",
+                        v2 =>
+                        {
+                            Assert.Equal(strValue, v2.StringProp);
+                            resetEvent.Set();
+                        },
+                        ex2 => { throw new InvalidOperationException(ex2.Message); });
+                },
+                ex => { throw new InvalidOperationException(ex.Message); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestValidCacheOnlyObjectWithValidCache() {
+        [Fact]
+        public void TestValidCacheOnlyObjectWithValidCache()
+        {
             var cacheValue = DateTime.Now.ToString();
-            var newValue = DateTime.Now.ToString() + "X";
+            var newValue = DateTime.Now + "X";
 
             TestValidCacheCore(cacheValue, newValue, cacheValue, 10);
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestValidCacheOnlyObjectWithInvalidCache() {
+        [Fact]
+        public void TestValidCacheOnlyObjectWithInvalidCache()
+        {
             var cacheValue = DateTime.Now.ToString();
-            var newValue = DateTime.Now.ToString() + "X";
+            var newValue = DateTime.Now + "X";
 
             TestValidCacheCore(cacheValue, newValue, newValue, -1);
         }
 
-        private void TestValidCacheCore(string cachedValue, string newValue, string expectedValue, int secondsUntilCacheExpires) {
-            string uniqueName = CacheEntry.BuildUniqueName(typeof(ValidCacheOnlyObject), new LoadContext("VCO"));
+        private void TestValidCacheCore(string cachedValue, string newValue, string expectedValue,
+            int secondsUntilCacheExpires)
+        {
+            var storeProvider = new InMemoryStoreProvider();
+            var dataManager = new DataManager(storeProvider, new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            var loadContext = new LoadContext("VCO");
+            var uniqueName = CacheEntry.BuildUniqueName(typeof(ValidCacheOnlyObject), loadContext);
             var cii = new CacheItemInfo(uniqueName, DateTime.Now, DateTime.Now.AddSeconds(secondsUntilCacheExpires));
-            DataManager.StoreProvider.Write(cii, ShortCacheObject.SCOLoadRequest.WriteToStream(cachedValue, -1).GetBuffer());
-
-            Thread.Sleep(100); // sleep to let the write happen;
+            storeProvider.Write(cii,
+                ShortCacheObject.ShortCacheObjectLoadRequest.WriteToStream(cachedValue, -1).GetBuffer());
 
             ShortCacheObject.DefaultStringValue = newValue;
 
-            DataManager.Current.Load<ValidCacheOnlyObject>("VCO",
-            (v1) =>
+            var x = dataManager.Load<ValidCacheOnlyObject>(loadContext,
+                v1 =>
+                {
+                    Assert.Equal(expectedValue, v1.StringProp);
+                    resetEvent.Set();
+                },
+                ex => { throw new InvalidOperationException(ex.Message); });
+            Assert.NotNull(x);
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+        }
+
+        [Fact]
+        public void TestNestedLoader()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            var loadContext = new LoadContext("nlo");
+
+            dataManager.Load<TestNestedLoaderObject>(loadContext,
+                val =>
+                {
+                    Assert.Equal(loadContext.Identity, val.Value);
+                    resetEvent.Set();
+                },
+                null);
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+        }
+
+        [Fact]
+        public void TestRegisterProxy()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            var propValue = ShortCacheObject.DefaultIntValue + 1;
+
+            var sco = new ShortCacheObject(new LoadContext("Proxy"))
             {
-                Assert.AreEqual(expectedValue, v1.StringProp);
-                TestComplete();
-            },
-            (ex) =>
-            {
-                Assert.Fail();
-                TestComplete();
-            });
+                IntProp = propValue
+            };
+
+            dataManager.RegisterProxy(sco, true,
+                obj =>
+                {
+                    Assert.NotEqual(propValue, obj.IntProp);
+                    Assert.Equal(ShortCacheObject.DefaultIntValue, obj.IntProp);
+                    Assert.Equal(ShortCacheObject.DefaultIntValue, sco.IntProp);
+                    resetEvent.Set();
+                });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestNestedLoader() {
-            string id = "nlo";
-            DataManager.Current.Load<TestNestedLoaderObject>(id,
-                (val) =>
+        [Fact]
+        public void TestUnusedObjectGc()
+        {
+            var resetEvent = new ManualResetEvent(false);
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var loadContext = new LoadContext("GC");
+            dataManager.Load<TestPoco>(loadContext,
+                testPoco =>
                 {
-                    Assert.AreEqual(id, val.StrValue);
-                    TestComplete();
+                    var entry = dataManager.Get<TestPoco>(loadContext);
+
+                    Assert.False(entry.HasBeenGCd);
+
+                    testPoco = null;
+
+                    ThreadPool.QueueUserWorkItem(state =>
+                    {
+                        GC.Collect();
+                        Assert.True(entry.HasBeenGCd);
+                        resetEvent.Set();
+                    });
                 },
-                null
-            );
+                ex => { throw new InvalidOperationException(); });
+
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestRegisterProxy() {
-            int propValue = 999;
-
-            ShortCacheObject sco = new ShortCacheObject("Proxy");
-            sco.IntProp = propValue;
-            Assert.AreNotEqual(propValue, ShortCacheObject.DefaultIntValue);
-
-            DataManager.Current.RegisterProxy<ShortCacheObject>(sco, true,
-                (obj) =>
-                {
-                    Assert.AreNotEqual(propValue, obj.IntProp);
-                    Assert.AreEqual(ShortCacheObject.DefaultIntValue, obj.IntProp);
-                    Assert.AreEqual(ShortCacheObject.DefaultIntValue, sco.IntProp);
-                    TestComplete();
-                },
-                false
-            );
-
-        }
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestUnusedObjectGC() {
-            DataManager.Current.Load<TestPoco>("GC",
-                (tp2) =>
-                {
-
-                    var entry = DataManager.Current.Get<TestPoco>("GC");
-
-                    PriorityQueue.AddUiWorkItem(
-
-                        () =>
-                        {
-
-
-                            GC.Collect();
-                            Assert.IsTrue(entry.HasBeenGCd);
-                            TestComplete();
-                        });
-
-                    Assert.IsFalse(entry.HasBeenGCd);
-                    tp2 = null;
-                },
-                (ex) =>
-                {
-                    Assert.Fail();
-                    TestComplete();
-                }
-           );
-        }
-
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestAutoContextCreation() {
-
-            // verify auto creation of context.
-            var obj = DataManager.Current.Load<TestContextObject>(4321,
-                (success) =>
-                {
-                    Assert.IsTrue(success.DeserializedValue.StartsWith(typeof(TestLoadContext).Name));
-                    TestComplete();
-                },
-                (error) =>
-                {
-                    Assert.Fail(error.Message);
-                    TestComplete();
-                }
-                );
-
-
-
-        }
-
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestVariableExpirationDefault() {
+        [Fact]
+        public void TestVariableExpirationDefault()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
             var date = default(DateTime);
-            var lc = new VariLoadContext(date);
-            lc.Foo = 1;
+            var lc = new VariLoadContext(date) {Foo = 1};
 
-            DataManager.Current.Load<VariableCacheObject>(lc,
-                (vco) =>
+            dataManager.Load<VariableCacheObject>(lc,
+                vco =>
                 {
-                    Assert.IsNull(vco.ExpirationTime);
-
-                    // wait a second
-                    Thread.Sleep(1000);
-
-                    lc.Foo = 2;                    
-
-                    // do another load - should not come from cache.
-                    //
-                    DataManager.Current.Load<VariableCacheObject>(lc,
-                           (vco2) =>
-                           {
-                               Assert.IsNull(vco2.ExpirationTime);
-                               Assert.AreEqual(lc.Foo, vco2.Foo);
-
-                               TestComplete();
-                           },
-                           (ex2) =>
-                           {
-                               Assert.Fail();
-                               TestComplete();
-                           }
-                       );
-
-
-                },
-                (ex) =>
-                {
-                    Assert.Fail();
-                    TestComplete();
-                }
-            );
-
-        }
-
-      
-
-        [TestMethod]
-        [Asynchronous]
-        public void TestVariableExpirationTomorrow() {
-            var date = DateTime.Now.AddDays(1);
-            var lc = new VariLoadContext(date);
-            lc.Foo = 1;
-
-            DataManager.Current.Load<VariableCacheObject>(lc,
-                (vco) =>
-                {
-                    Assert.IsNotNull(vco.ExpirationTime);
-
-                    // wait a second
+                    Assert.Null(vco.ExpirationTime);
                     Thread.Sleep(1000);
 
                     lc.Foo = 2;
+                    dataManager.Load<VariableCacheObject>(lc,
+                        vco2 =>
+                        {
+                            Assert.Null(vco2.ExpirationTime);
+                            Assert.Equal(lc.Foo, vco2.Foo);
 
-                    // do another load - SHOULD come from cache.
-                    //
-                    DataManager.Current.Load<VariableCacheObject>(lc,
-                           (vco2) =>
-                           {
-                               Assert.IsNotNull(vco2.ExpirationTime);
-                               Assert.AreNotEqual(lc.Foo, vco2.Foo);
-                               Assert.AreEqual(1, vco2.Foo);
-
-                               TestComplete();
-                           },
-                           (ex2) =>
-                           {
-                               Assert.Fail();
-                               TestComplete();
-                           }
-                       );
-
-                    
+                            resetEvent.Set();
+                        },
+                        ex2 => { throw new InvalidOperationException(); });
                 },
-                (ex) =>
-                {
-                    Assert.Fail();
-                    TestComplete();
-                }
-            );
-
+                ex => { throw new InvalidOperationException(); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestDerivedClassWithInheritedLoader() {
+        [Fact]
+        public void TestVariableExpirationTomorrow()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            var date = DateTime.Now.AddDays(1);
+            var lc = new VariLoadContext(date) {Foo = 1};
+
+            dataManager.Load<VariableCacheObject>(lc,
+                vco =>
+                {
+                    Assert.NotNull(vco.ExpirationTime);
+                    Thread.Sleep(1000);
+
+                    lc.Foo = 2;
+                    dataManager.Load<VariableCacheObject>(lc,
+                        vco2 =>
+                        {
+                            Assert.NotNull(vco2.ExpirationTime);
+                            Assert.NotEqual(lc.Foo, vco2.Foo);
+                            Assert.Equal(1, vco2.Foo);
+
+                            resetEvent.Set();
+                        },
+                        ex2 => { throw new InvalidOperationException(); });
+                },
+                ex => { throw new InvalidOperationException(); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+        }
+
+        [Fact]
+        public void TestDerivedClassWithInheritedLoader()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
             var id = DateTime.Now.GetHashCode().ToString();
-            var obj = DataManager.Current.Load<TestDerivedNestedLoaderObject>(id,
-                (tdnlo) =>
+            dataManager.Load<TestDerivedNestedLoaderObject>(id,
+                testDerivedNestedLoaderObject =>
                 {
-                    Assert.AreEqual(id, tdnlo.StrValue);
-                    TestComplete();
+                    Assert.Equal(id, testDerivedNestedLoaderObject.Value);
+                    resetEvent.Set();
                 },
-                (ex) =>
-                {
-                    Assert.Fail();
-                    TestComplete();
-                }
-            );
+                ex => { throw new InvalidOperationException(ex.Message); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
         }
 
-        [TestMethod]
-        [Asynchronous]
-        public void TestDerivedLoaderAttribute() {
-
-            string id = DateTime.Now.ToString();
-            var obj = DataManager.Current.Load<TestPocoDerived>(id,
-                (vm) =>
+        [Fact]
+        public void TestDerivedLoaderAttribute()
+        {
+            var dataManager = new DataManager(new InMemoryStoreProvider(), new WPUiDispatcher());
+            var resetEvent = new ManualResetEvent(false);
+            var id = DateTime.Now.ToString();
+            var valueReference = dataManager.Load<TestPocoDerived>(id,
+                testPocoDerived =>
                 {
-                    Assert.AreEqual(id, vm.Value);
-                    TestComplete();
+                    Assert.Equal(id, testPocoDerived.Value);
+                    resetEvent.Set();
                 },
-                (ex) =>
-                {
-                    Assert.Fail();
-                    TestComplete();
-                }
-            );
-
-
+                ex => { throw new InvalidOperationException(ex.Message); });
+            Assert.True(resetEvent.WaitOne(AsynchronousTestTimeout));
+            Assert.NotNull(valueReference);
         }
-
-        public class TestLoadRequest : LoadRequest {
-
-            string _value;
-
-            public TestLoadRequest(LoadContext context, string value)
-                : base(context) {
-                _value = value;
-            }
-
-
-            public override void Execute(Action<LoadRequestResult> result) {
-
-                MemoryStream str = new MemoryStream(UTF8Encoding.UTF8.GetBytes(_value));
-                str.Seek(0, SeekOrigin.Begin);
-                result(new LoadRequestResult(str));
-            }
-        }
-
-        public class TestLoadContext : LoadContext {
-
-            public TestLoadContext(int intCtor)
-                : this(intCtor.ToString()) {
-
-            }
-
-            public TestLoadContext(string str)
-                : base(typeof(TestLoadContext).Name + ":" + str) {
-            }
-
-            public int Option { get; set; }
-
-            protected override string GenerateKey() {
-                return string.Format("{0}_{1}", Identity, Option);
-            }
-        }
-
-        public class TestContextObject : ModelItemBase<TestLoadContext> {
-
-            public TestContextObject() {
-
-            }
-
-            public string DeserializedValue { get; set; }
-
-            public class TestContextDataLoader : IDataLoader<TestLoadContext> {
-                public LoadRequest GetLoadRequest(TestLoadContext loadContext, Type objectType) {
-                    return new TestLoadRequest(loadContext, String.Format("{0}.{1}", loadContext.Identity, loadContext.Option));
-                }
-
-                public object Deserialize(TestLoadContext loadContext, Type objectType, Stream stream) {
-
-                    byte[] bytes = new byte[stream.Length];
-                    stream.Read(bytes, 0, bytes.Length);
-
-                    string val = UTF8Encoding.UTF8.GetString(bytes, 0, bytes.Length);
-
-                    var tco = new TestContextObject();
-                    tco.LoadContext = loadContext;
-                    tco.DeserializedValue = val;
-                    return tco;
-
-                }
-            }
-
-        }
-
-        public class TestNestedLoaderObject {
-            public string StrValue { get; set; }
-
-            public class NLO_Loader : IDataLoader<LoadContext> {
-
-                public LoadRequest GetLoadRequest(LoadContext identifier, Type objectType) {
-                    return new NestedLoadRequest(identifier);
-                }
-
-                public object Deserialize(LoadContext identifier, Type objectType, Stream stream) {
-                    StreamReader sr = new StreamReader(stream);
-
-                    var tnlo = (TestNestedLoaderObject)Activator.CreateInstance(objectType);
-
-                    tnlo.StrValue = sr.ReadToEnd();
-
-                    return tnlo;
-
-                }
-
-                private class NestedLoadRequest : LoadRequest {
-                    public NestedLoadRequest(LoadContext id)
-                        : base(id) {
-
-                    }
-
-                    public override void Execute(Action<LoadRequestResult> result) {
-                        MemoryStream ms = new MemoryStream(UTF8Encoding.UTF8.GetBytes(LoadContext.Identity.ToString()));
-                        ms.Seek(0, SeekOrigin.Begin);
-                        result(new LoadRequestResult(ms));
-                    }
-                }
-            }
-
-        }
-
-        public class TestDerivedNestedLoaderObject : TestNestedLoaderObject {
-
-            
-        }        
-       
-
-        [CachePolicy(CachePolicy.NoCache)]
-        public class NoCacheObject : ShortCacheObject {
-
-            public NoCacheObject() {
-
-            }
-
-            public NoCacheObject(object id)
-                : base(id) {
-            }
-
-            public class NCODataLoader : ShortCacheObject.SCODataLoader {
-                protected override ShortCacheObject CreateInstance(object id) {
-                    return new NoCacheObject(id);
-                }
-            }
-        }
-
-        [CachePolicy(CachePolicy.ValidCacheOnly, 10)]
-        public class ValidCacheOnlyObject : ShortCacheObject {
-            public ValidCacheOnlyObject() {
-
-            }
-
-            public ValidCacheOnlyObject(object id)
-                : base(id) {
-            }
-
-            public class VCODataLoader : ShortCacheObject.SCODataLoader {
-                protected override ShortCacheObject CreateInstance(object id) {
-                    return new ValidCacheOnlyObject(id);
-                }
-            }
-
-        }
-
-        public class VariLoadContext : LoadContext {
-            public int Foo { get; set; }
-            public VariLoadContext(object id)
-                : base(id) {
-            }
-        }
-
-        [CachePolicy(CachePolicy.CacheThenRefresh, 1)]
-        public class VariableCacheObject : ModelItemBase<VariLoadContext>, ICachedItem {
-
-            
-
-            DateTime? _expTime;
-            public DateTime? ExpirationTime {
-                get { return _expTime; }
-                set { _expTime = value; }
-            }
-
-            public int Foo { get; set; }
-
-
-            public class VariCacheLoader : IDataLoader<VariLoadContext> {
-
-                public  LoadRequest GetLoadRequest(VariLoadContext loadContext, Type objectType) {
-                    return new VariloadRequest(loadContext);
-                }
-
-                public  object Deserialize(VariLoadContext loadContext, Type objectType, Stream stream) {
-
-                    VariableCacheObject vco = new VariableCacheObject();
-                    vco.LoadContext = loadContext;
-                    var date = (DateTime)loadContext.Identity;
-                    vco.ExpirationTime = (date == default(DateTime)) ? null : (DateTime?)date;
-                    vco.Foo = loadContext.Foo;
-                    return vco;
-
-                }
-
-                public class VariloadRequest : LoadRequest {
-                    public VariloadRequest(LoadContext lc)
-                        : base(lc) {
-
-                    }
-
-                    public override void Execute(Action<LoadRequestResult> result) {
-                        string foo = LoadContext.Identity.ToString();
-                        MemoryStream ms = new MemoryStream(Encoding.Unicode.GetBytes(foo));
-
-                        result(new LoadRequestResult(ms));
-                    }
-                }
-            }
-        }
-
-        [CachePolicy(CachePolicy.CacheThenRefresh, 10)]
-        public class ShortCacheObject : ModelItemBase {
-
-            public static string DefaultIdentifier = "x";
-            public static string DefaultStringValue = "StringValue";
-            public static int DefaultIntValue = 1234;
-            public static string FailDeserializeMessage = null;
-
-            #region Property StringProp
-            private string _StringProp;
-            public string StringProp {
-                get {
-                    return _StringProp;
-                }
-                set {
-                    if (_StringProp != value) {
-                        _StringProp = value;
-                        RaisePropertyChanged("StringProp");
-                    }
-                }
-            }
-            #endregion
-
-
-
-            #region Property IntProp
-            private int _IntProp;
-            public int IntProp {
-                get {
-                    return _IntProp;
-                }
-                set {
-                    if (_IntProp != value) {
-                        _IntProp = value;
-                        RaisePropertyChanged("IntProp");
-                    }
-                }
-            }
-            #endregion
-
-            public ShortCacheObject() {
-
-            }
-
-            public ShortCacheObject(object id)
-                : base(id) {
-            }
-
-            public class SCODataLoader : IDataLoader<LoadContext> {
-
-                protected virtual ShortCacheObject CreateInstance(object identity) {
-                    return new ShortCacheObject(identity);
-                }
-
-                public LoadRequest GetLoadRequest(LoadContext identity, Type objectType) {
-                    return new SCOLoadRequest(identity, DefaultStringValue, DefaultIntValue);
-                }
-
-                public static ShortCacheObject Deserialize(ShortCacheObject item, Stream s)
-                {
-                    StreamReader sr = new StreamReader(s);
-
-                    ShortCacheObject sco = item;
-                    sco.StringProp = sr.ReadLine();
-
-                    // this is expected to fail in the DeserializeCacheFail case
-                    sco.IntProp = Int32.Parse(sr.ReadLine());
-                    return sco;
-                }
-
-                public static void Serialize(ShortCacheObject o, Stream s)
-                {
-                    StreamWriter sw = new StreamWriter(s);
-                    sw.WriteLine(o.StringProp);
-                    sw.WriteLine(o.IntProp);
-                    sw.Flush();
-                }
-
-                public object Deserialize(LoadContext id, Type objectType, Stream stream) {
-
-                    if (FailDeserializeMessage != null) {
-                        throw new FormatException(FailDeserializeMessage);
-                    }
-                    StreamReader sr = new StreamReader(stream);
-
-                    ShortCacheObject sco = CreateInstance(id.Identity);
-                    sco.StringProp = sr.ReadLine();
-
-                    // this is expected to fail in the DeserializeCacheFail case
-                    sco.IntProp = Int32.Parse(sr.ReadLine());
-                    return sco;
-                }
-
-
-            }
-
-            public class SCOLoadRequest : LoadRequest {
-
-                public static int LoadTimeMs = 20;
-                public static Exception Error = null;
-
-                string s;
-                int i;
-
-                public SCOLoadRequest(LoadContext id, string strValue, int intValue)
-                    : base(id) {
-                    s = strValue;
-                    i = intValue;
-                }
-
-                public override void Execute(Action<LoadRequestResult> result) {
-                    ThreadPool.QueueUserWorkItem((state) =>
-                    {
-                        Thread.Sleep(LoadTimeMs);
-                        string str = s;
-                        int intVal = i;
-                        MemoryStream ms = WriteToStream(str, intVal);
-                        try {
-                            if (Error == null) {
-                                result(new LoadRequestResult(ms));
-                            }
-                            else {
-                                result(new LoadRequestResult(Error));
-                            }
-                        }
-                        catch {
-
-                        }
-                    },
-                    null);
-                }
-
-                public static MemoryStream WriteToStream(string str, int intVal) {
-                    MemoryStream ms = new MemoryStream();
-                    StreamWriter sw = new StreamWriter(ms);
-                    sw.WriteLine(str);
-                    sw.WriteLine(intVal);
-                    sw.Flush();
-                    ms.Seek(0, SeekOrigin.Begin);
-                    return ms;
-                }
-            }
-        }
-
-
     }
 }

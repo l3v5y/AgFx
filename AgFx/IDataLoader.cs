@@ -6,6 +6,7 @@
 
 using System;
 using System.IO;
+using System.Threading;
 
 namespace AgFx
 {
@@ -31,7 +32,6 @@ namespace AgFx
         /// <returns></returns>
         object Deserialize(T loadContext, Type objectType, Stream stream);        
     }
-   
 }
 
 

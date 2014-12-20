@@ -10,6 +10,7 @@ namespace AgFx {
     internal class EntryStats {
 
         internal CacheEntry _cacheEntry;
+        private bool _shouldCollectStatistics;
 
         private List<double> _fetchTimes;
         private List<double> _deserializeTimes;
@@ -116,22 +117,23 @@ namespace AgFx {
             }
         }
 
-        public EntryStats(CacheEntry entry) {
+        public EntryStats(CacheEntry entry, bool shouldCollectStatistics) {
             _cacheEntry = entry;
+            _shouldCollectStatistics = shouldCollectStatistics;
         }
 
         DateTime? _deserializeStartTime;
 
         public void OnStartDeserialize() {
 
-            if (!DataManager.ShouldCollectStatistics) return;
+            if (!_shouldCollectStatistics) return;
                         
             _deserializeStartTime = DateTime.Now;
         }
 
         public void OnCompleteDeserialize(int dataSize) {
 
-            if (!DataManager.ShouldCollectStatistics) return;
+            if (!_shouldCollectStatistics) return;
 
             if (_deserializeStartTime == null) {                
                 return;
@@ -162,7 +164,7 @@ namespace AgFx {
 
         public void OnRequest() {
 
-            if (!DataManager.ShouldCollectStatistics) return;
+            if (!_shouldCollectStatistics) return;
 
             RequestCount++;
         }
@@ -171,13 +173,13 @@ namespace AgFx {
 
         public void OnStartFetch() {
 
-            if (!DataManager.ShouldCollectStatistics) return;
+            if (!_shouldCollectStatistics) return;
             _fetchStartTime = DateTime.Now;
         }
 
         public void OnCompleteFetch(bool success) {
 
-            if (!DataManager.ShouldCollectStatistics) return;
+            if (!_shouldCollectStatistics) return;
 
             if (!_fetchStartTime.HasValue) {            
                 return;

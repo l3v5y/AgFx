@@ -5,7 +5,6 @@
     xmlns:shell="clr-namespace:Microsoft.Phone.Shell;assembly=Microsoft.Phone"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:AgFx="clr-namespace:AgFx;assembly=AgFx" 
     xmlns:converters="clr-namespace:AgFx.Converters;assembly=AgFx"
     x:Class="NWSWeather.Sample.MainPage"
     mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="768"
@@ -13,9 +12,14 @@
     shell:SystemTray.IsVisible="True">
 
     <phone:PhoneApplicationPage.Resources>
-        <converters:StringFormatConverter x:Key="StringFormatConverter"/>        
-        <converters:VisibilityConverter x:Key="VisibilityConverter1" />
+        <converters:StringFormatConverter x:Key="StringFormatConverter"/>
+        <converters:VisibilityConverter x:Key="VisibilityConverter" />
     </phone:PhoneApplicationPage.Resources>
+
+    <shell:SystemTray.ProgressIndicator>
+        <shell:ProgressIndicator IsIndeterminate="{Binding IsUpdating}" 
+                                 IsVisible="{Binding IsUpdating}" />
+    </shell:SystemTray.ProgressIndicator>
 
     <!--Sample code showing usage of ApplicationBar-->
     <!--<phone:PhoneApplicationPage.ApplicationBar>
@@ -45,75 +49,71 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-
         <StackPanel x:Name="TitlePanel" Grid.Row="0" Margin="5">
             <TextBlock x:Name="ApplicationTitle" Text="NWS Weather Sample" Style="{StaticResource PhoneTextNormalStyle}"/>
         </StackPanel>
 
-
-        <Grid x:Name="ContentPanel" Grid.Row="1" Margin="12,0,12,0">
+        <Grid x:Name="ContentPanel" Grid.Row="1" >
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="60" />                
+                <RowDefinition Height="60" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-
-
-            <TextBox InputScope="Number" Height="77" x:Name="txtZipCode" Text="" VerticalAlignment="Top" Width="334" HorizontalAlignment="Left" />
-            <Button Content="Go" Height="77" x:Name="btnAddZipCode" VerticalAlignment="Top" Width="103" Click="btnAddZipCode_Click" HorizontalAlignment="Right" />
-
-
-            <Grid x:Name="info" Visibility="Collapsed" Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox InputScope="Number" x:Name="txtZipCode" Text="" VerticalAlignment="Top" HorizontalAlignment="Stretch" />
+            <Button Content="Go" x:Name="btnAddZipCode" VerticalAlignment="Top" Click="btnAddZipCode_Click" HorizontalAlignment="Right" Grid.Column="1" />
+            <Grid x:Name="info" Visibility="Collapsed" Grid.Row="1" Grid.ColumnSpan="2">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="30" />
                     <RowDefinition Height="30" />
                 </Grid.RowDefinitions>
                 <StackPanel Orientation="Horizontal" Grid.Row="0">
-                    <TextBlock Text="{Binding ZipCodeInfo.City}" FontWeight="Bold"/>
-                    <TextBlock Text="{Binding ZipCodeInfo.State}" FontWeight="Bold" Margin="5,0,0,0" HorizontalAlignment="Left" />
+                    <TextBlock Style="{StaticResource PhoneTextNormalStyle}" Text="{Binding ZipCodeInfo.City}" FontWeight="Bold"/>
+                    <TextBlock Style="{StaticResource PhoneTextNormalStyle}" Text="{Binding ZipCodeInfo.State}" />
                 </StackPanel>
 
-                <Border Visibility="{Binding IsUpdating, Converter={StaticResource VisibilityConverter1}, ConverterParameter=!}" Grid.Row="1">
-                    <StackPanel Orientation="Horizontal" Grid.Row="1" Visibility="{Binding Path=WeatherPeriods.Count, Converter={StaticResource VisibilityConverter1}}">
-                        <TextBlock Text="Last Updated: "/>
-                        <TextBlock Text="{Binding Path=LastUpdated, ConverterParameter=\{0:m\} \{0:t\}, Converter={StaticResource StringFormatConverter}}"/>
+                <Border Visibility="{Binding IsUpdating, Converter={StaticResource VisibilityConverter}, ConverterParameter=!}" Grid.Row="1">
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding Path=WeatherPeriods.Count, Converter={StaticResource VisibilityConverter}}">
+                        <TextBlock Style="{StaticResource PhoneTextNormalStyle}" Text="Last Updated: "/>
+                        <TextBlock Style="{StaticResource PhoneTextNormalStyle}" Text="{Binding Path=LastUpdated, ConverterParameter=\{0:m\} \{0:t\}, Converter={StaticResource StringFormatConverter}}"/>
                         <HyperlinkButton Content="Refresh" x:Name="btnRefresh" Click="btnRefresh_Click"/>
                     </StackPanel>
                 </Border>
-                <TextBlock Text="Updating..." Visibility="{Binding Path=IsUpdating, Converter={StaticResource VisibilityConverter1}}" Grid.Row="1" />
+                <TextBlock Text="Updating..." Visibility="{Binding Path=IsUpdating, Converter={StaticResource VisibilityConverter}}" Grid.Row="1" />
             </Grid>
-           
-
-            <ScrollViewer HorizontalAlignment="Left" Margin="27,2,0,20"  Grid.Row="3" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" >
-                <ItemsControl x:Name="forecast" ItemsSource="{Binding WeatherPeriods}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Margin="1">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="60"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="60"/>
-                                    <ColumnDefinition Width="60"/>
-                                </Grid.ColumnDefinitions>
-                                <Rectangle Width="60" Height="60" Fill="Silver" Grid.RowSpan="2"/>
-                                <Image Width="60" Height="60" Stretch="UniformToFill" Source="{Binding WeatherImage}" Grid.RowSpan="2"  />
-                                <TextBlock Margin="2,0,0,0" Text="{Binding Title}" FontWeight="Bold" d:LayoutOverrides="Height" Grid.Column="1"/>
-                                <TextBlock Grid.Column="1"  Margin="2,0,0,0" HorizontalAlignment="Left" Text="{Binding Summary}" Grid.Row="1"  Width="233"/>
-                                <TextBlock Grid.Column="2" Text="Temp:"/>
-                                <TextBlock Grid.Column="3" Text="{Binding MaxTemperature, ConverterParameter=\{0\}°, Converter={StaticResource StringFormatConverter}}" Foreground="#FFE49A9A"  HorizontalAlignment="Right"/>
-                                <TextBlock Grid.Column="3" Text="{Binding MinTemperature, ConverterParameter=\{0\}°, Converter={StaticResource StringFormatConverter}}" Foreground="#FFA6ABE9"  HorizontalAlignment="Right"/>
-                                <TextBlock Grid.Column="2" Text="Precip:" Grid.Row="1" />
-                                <TextBlock Grid.Column="3" Text="{Binding PrecipChancePercent, ConverterParameter=\{0\}%, Converter={StaticResource StringFormatConverter}}" Grid.Row="1" HorizontalAlignment="Right" />
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+            <phone:LongListSelector
+                Grid.Row="2"
+                Grid.ColumnSpan="2"
+                ItemsSource="{Binding WeatherPeriods}">
+                <phone:LongListSelector.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="12,0,0,6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="60"/>
+                            </Grid.ColumnDefinitions>
+                            <Rectangle Width="60" Height="60" Fill="{StaticResource PhoneDisabledBrush}" Grid.RowSpan="2"/>
+                            <Image Width="60" Height="60" Stretch="UniformToFill" Source="{Binding WeatherImage}" Grid.RowSpan="2"  />
+                            <TextBlock Margin="2,0,0,0" Text="{Binding Title}" FontWeight="Bold" d:LayoutOverrides="Height" Grid.Column="1"/>
+                            <TextBlock Grid.Column="1"  Margin="2,0,0,0" HorizontalAlignment="Left" Text="{Binding Summary}" Grid.Row="1"  Width="233"/>
+                            <TextBlock Grid.Column="2" Text="Temp:"/>
+                            <TextBlock Grid.Column="3" Text="{Binding MaxTemperature, ConverterParameter=\{0\}°, Converter={StaticResource StringFormatConverter}}" Foreground="#FFE49A9A"  HorizontalAlignment="Right"/>
+                            <TextBlock Grid.Column="3" Text="{Binding MinTemperature, ConverterParameter=\{0\}°, Converter={StaticResource StringFormatConverter}}" Foreground="#FFA6ABE9"  HorizontalAlignment="Right"/>
+                            <TextBlock Grid.Column="2" Text="Precip:" Grid.Row="1" />
+                            <TextBlock Grid.Column="3" Text="{Binding PrecipChancePercent, ConverterParameter=\{0\}%, Converter={StaticResource StringFormatConverter}}" Grid.Row="1" HorizontalAlignment="Right" />
+                        </Grid>
+                    </DataTemplate>
+                </phone:LongListSelector.ItemTemplate>
+            </phone:LongListSelector>
         </Grid>
     </Grid>
-
 </phone:PhoneApplicationPage>

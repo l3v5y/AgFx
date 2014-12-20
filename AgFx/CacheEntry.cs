@@ -8,10 +8,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace AgFx
 {
-
     /// <summary>
     /// This class does most of the heavy lifting for this framework.
     /// 
@@ -56,8 +56,8 @@ namespace AgFx
         private string _uniqueName;
         private TimeSpan? _cacheTime;
         private CachePolicy? _cachePolicy;
-        private WeakReference _valueReference = null;
-        private object _rootedValue = null;
+        private WeakReference _valueReference;
+        private object _rootedValue;
 
         // stats
         //
@@ -71,13 +71,15 @@ namespace AgFx
         // these guys manage the loading of values from the 
         // cache or from the wire.
         //
-        private CacheValueLoader _cacheLoader;
-        private LiveValueLoader _liveLoader;
+        private readonly CacheValueLoader _cacheLoader;
+        private readonly LiveValueLoader _liveLoader;
 
         // we cache policies based on type for perf 
-        //
+        // TODO: Do we need to?
         static Dictionary<Type, CachePolicyAttribute> _cachedPolicies = new Dictionary<Type, CachePolicyAttribute>();
 
+        private readonly IStoreProvider _storeProvider;
+        
         /// <summary>
         /// The cache policy for this item
         /// </summary>
@@ -352,22 +354,29 @@ namespace AgFx
         /// <param name="objectType"></param>
         /// <param name="context"></param>
         /// <param name="proxyCallback">callback that should be invoked when update is finished</param>
-        public CacheEntry(LoadContext context, Type objectType, Action<CacheEntry> proxyCallback)
+        /// <param name="storeProvider">Store provider for read/write</param>
+        /// <param name="shouldCollectStatistics">Whether or not this CacheEntry should be logging about loading</param>
+        public CacheEntry(LoadContext context, Type objectType, Action<CacheEntry> proxyCallback, IStoreProvider storeProvider, bool shouldCollectStatistics)
         {
             _proxyComplitionCallback = proxyCallback;
             LoadContext = context;
             ObjectType = objectType;
+            if (storeProvider == null)
+            {
+                throw new ArgumentNullException("storeProvider");
+            }
+            this._storeProvider = storeProvider;
 
-            _stats = new EntryStats(this);
+            _stats = new EntryStats(this, shouldCollectStatistics);
 
             // set up our value loaders.
             //
-            _cacheLoader = new CacheValueLoader(this);
+            _cacheLoader = new CacheValueLoader(this, storeProvider);
             _cacheLoader.Loading += ValueLoader_Loading;
             _cacheLoader.ValueAvailable += Cached_ValueAvailable;
             _cacheLoader.LoadFailed += CacheLoader_Failed;
 
-            _liveLoader = new LiveValueLoader(this);
+            _liveLoader = new LiveValueLoader(this, storeProvider);
             _liveLoader.Loading += ValueLoader_Loading;
             _liveLoader.ValueAvailable += Live_ValueAvailable;
             _liveLoader.LoadFailed += LiveValueLoader_Failed;
@@ -632,10 +641,10 @@ namespace AgFx
         /// <param name="force">True to always load a new value.</param>
         private void Load(bool force)
         {
-            lock (this)
+            lock(this)
             {
                 // someone is already trying to do a load.
-                if (GetBoolValue(LoadPendingMask) || _cacheLoader.IsBusy || _liveLoader.IsBusy || !_liveLoader.IsValid)
+                if(GetBoolValue(LoadPendingMask) || _cacheLoader.IsBusy || _liveLoader.IsBusy || !_liveLoader.IsValid)
                 {
                     return;
                 }
@@ -645,9 +654,7 @@ namespace AgFx
                 //
                 GetRootedObjectInternal(false, out _rootedValue);
 
-                PriorityQueue.AddWorkItem(() =>
-                    LoadInternal(force)
-                );
+                ThreadPool.QueueUserWorkItem((state) => LoadInternal(force), null);
             }
         }
 
@@ -851,7 +858,7 @@ namespace AgFx
 
             // if no one is holding the value, don't bother updating.
             //
-            if (!CheckIfAnyoneCares())
+            if(!CheckIfAnyoneCares())
             {
                 return;
             }
@@ -862,41 +869,40 @@ namespace AgFx
 
             // sure source matches dest
             //
-            if (!value.GetType().IsInstanceOfType(source))
+            if(!value.GetType().IsInstanceOfType(source))
             {
                 throw new InvalidOperationException("Types not compatible");
             }
 
             Action handler = () =>
+            {
+                // make sure another update hasn't beat us to the punch.
+                if(Version > version)
                 {
-                    // make sure another update hasn't beat us to the punch.
-                    if (Version > version)
-                    {
-                        return;
-                    }
+                    return;
+                }
 
-                    try {
+                try
+                {
+                    _stats.OnStartUpdate();
 
-                        _stats.OnStartUpdate();
+                    ReflectionSerializer.UpdateObject(source, value, LastUpdatedTime);
+                }
+                finally
+                {
+                    _stats.OnCompleteUpdate();
+                }
+                // notify successful completion.
+                NotifyCompletion(loader, null);
+            };
 
-                        ReflectionSerializer.UpdateObject(source, value, true, LastUpdatedTime);                        
-                    }
-                    finally {
-                        _stats.OnCompleteUpdate();
-                    }
-                    // notify successful completion.
-                    NotifyCompletion(loader, null);
-                };
-
-            if (SynchronousMode)
+            if(SynchronousMode)
             {
                 handler();
             }
             else
             {
-                PriorityQueue.AddUiWorkItem(
-                   handler
-                );
+                ThreadPool.QueueUserWorkItem((state) => handler(), null);
             }
         }
 
@@ -908,16 +914,11 @@ namespace AgFx
         {
             if (CheckIfAnyoneCares())
             {
-                IUpdatable updateable = ValueInternal as IUpdatable;
+                var updateable = ValueInternal as IUpdatable;
 
-                if (updateable != null)
+                if(updateable != null)
                 {
-                    PriorityQueue.AddUiWorkItem(
-                        () =>
-                        {
-                            updateable.LastUpdated = LastUpdatedTime;
-                        }
-                   );
+                    ThreadPool.QueueUserWorkItem((state) => updateable.LastUpdated = LastUpdatedTime, null);
                 }
             }
         }
@@ -938,7 +939,6 @@ namespace AgFx
             // essentially stop cache loads for this item going forward.
             //
             _cacheLoader.SetExpired();
-                                  
         }
 
         /// <summary>
@@ -946,7 +946,7 @@ namespace AgFx
         /// </summary>
         internal void Clear()
         {
-            DataManager.StoreProvider.DeleteAll(UniqueName);
+            _storeProvider.Delete(UniqueName);
         }
 
         internal enum DataLoadState
@@ -986,6 +986,8 @@ namespace AgFx
                 private set;
             }
 
+            protected IStoreProvider StoreProvider;
+
             public UpdateCompletionHandler NextCompletedAction { get; set; }
 
             // events.
@@ -993,9 +995,10 @@ namespace AgFx
             public event EventHandler<ValueAvailableEventArgs> ValueAvailable;
             public event EventHandler<ExceptionEventArgs> LoadFailed;
 
-            public ValueLoader(CacheEntry owningEntry)
+            protected ValueLoader(CacheEntry owningEntry, IStoreProvider storeProvider)
             {
                 CacheEntry = owningEntry;
+                StoreProvider = storeProvider;
             }
 
             public DataLoadState LoadState
@@ -1233,8 +1236,8 @@ namespace AgFx
                 set;
             }
 
-            public CacheValueLoader(CacheEntry owningEntry)
-                : base(owningEntry)
+            public CacheValueLoader(CacheEntry owningEntry, IStoreProvider storeProvider)
+                : base(owningEntry, storeProvider)
             {
 
             }
@@ -1249,7 +1252,7 @@ namespace AgFx
                 {
                     if (_cacheItemInfo == null && !_thereIsNoCacheItem)
                     {
-                        _cacheItemInfo = DataManager.StoreProvider.GetLastestExpiringItem(CacheEntry.UniqueName);
+                        _cacheItemInfo = StoreProvider.GetItem(CacheEntry.UniqueName);
                     }
 
                     if (_cacheItemInfo == null)
@@ -1287,7 +1290,7 @@ namespace AgFx
                 //
                 try
                 {
-                    Data = DataManager.StoreProvider.Read(_cacheItemInfo);
+                    Data = StoreProvider.Read(_cacheItemInfo);
 
 
                     if (Data == null) {
@@ -1353,20 +1356,25 @@ namespace AgFx
             /// <param name="updatedTime"></param>
             /// <param name="expirationTime"></param>
             /// <param name="isOptimized"></param>
-            public void Save(string uniqueName, byte[] data, DateTime updatedTime, DateTime expirationTime, bool isOptimized)
+            public void Save(string uniqueName, byte[] data, DateTime updatedTime, DateTime expirationTime,
+                bool isOptimized)
             {
-                if (data == null)
+                if(data == null)
                 {
                     throw new ArgumentNullException("data");
                 }
 
-                _cacheItemInfo = new CacheItemInfo(uniqueName, updatedTime, expirationTime);
-                _cacheItemInfo.IsOptimized = isOptimized;
+                _cacheItemInfo = new CacheItemInfo(uniqueName, updatedTime, expirationTime)
+                {
+                    IsOptimized = isOptimized
+                };
                 Data = null;
                 LoadState = DataLoadState.None;
 
-                Debug.WriteLine("Writing cache for {0} (ID={3}), IsOptimized={1}, Will expire {2}", CacheEntry.ObjectType.Name, _cacheItemInfo.IsOptimized, _cacheItemInfo.ExpirationTime, CacheEntry.LoadContext.Identity.ToString() );
-                DataManager.StoreProvider.Write(_cacheItemInfo, data);
+                Debug.WriteLine("{0}: Writing cache for {1} (ID={4}), IsOptimized={2}, Will expire {3}", DateTime.Now,
+                    CacheEntry.ObjectType.Name, _cacheItemInfo.IsOptimized, _cacheItemInfo.ExpirationTime,
+                    CacheEntry.LoadContext.Identity);
+                StoreProvider.Write(_cacheItemInfo, data);
             }
 
             internal void SetExpired()
@@ -1382,7 +1390,7 @@ namespace AgFx
         /// </summary>
         internal class LiveValueLoader : ValueLoader
         {
-            private static TimeSpan RetryTimeout = TimeSpan.FromSeconds(60);
+            private static readonly TimeSpan RetryTimeout = TimeSpan.FromSeconds(60);
 
             /// <summary>
             /// If a load fails, we wait 60 seconds before retrying it.  The avoids
@@ -1416,8 +1424,8 @@ namespace AgFx
                 private set;
             }
 
-            public LiveValueLoader(CacheEntry entry)
-                : base(entry)
+            public LiveValueLoader(CacheEntry entry, IStoreProvider storeProvider)
+                : base(entry, storeProvider)
             {
             }
 

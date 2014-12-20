@@ -5,111 +5,32 @@
 
 
 using System;
-using AgFx;
-using System.Xml.Linq;
+using System.IO;
 using System.Linq;
+using System.Xml.Linq;
+using AgFx;
 
 namespace NWSWeather.Sample.ViewModels
 {
-
     /// <summary>
-    /// Our wrapper around fetching location information for a zipcode - city, state, etc.
+    ///     Our wrapper around fetching location information for a zipcode - city, state, etc.
     /// </summary>
-    [CachePolicy(CachePolicy.Forever)] 
+    [CachePolicy(CachePolicy.Forever)]
     public class ZipCodeVm : ModelItemBase<ZipCodeLoadContext>
     {
         public ZipCodeVm()
         {
-
         }
-        
+
         public ZipCodeVm(string zipcode)
             : base(new ZipCodeLoadContext(zipcode))
         {
-
         }
-                
-        #region Property City
-        private string _City;
-        public string City
-        {
-            get
-            {
-                return _City;
-            }
-            set
-            {
-                if (_City != value)
-                {
-                    _City = value;
-                    RaisePropertyChanged("City");
-                }
-            }
-        }
-        #endregion
-
-        #region Property State
-        private string _State;
-        public string State
-        {
-            get
-            {
-                return _State;
-            }
-            set
-            {
-                if (_State != value)
-                {
-                    _State = value;
-                    RaisePropertyChanged("State");
-                }
-            }
-        }
-        #endregion
-
-        #region Property AreaCode
-        private string _AreaCode;
-        public string AreaCode
-        {
-            get
-            {
-                return _AreaCode;
-            }
-            set
-            {
-                if (_AreaCode != value)
-                {
-                    _AreaCode = value;
-                    RaisePropertyChanged("AreaCode");
-                }
-            }
-        }
-        #endregion
-
-        #region Property TimeZone
-        private string _TimeZone;
-        public string TimeZone
-        {
-            get
-            {
-                return _TimeZone;
-            }
-            set
-            {
-                if (_TimeZone != value)
-                {
-                    _TimeZone = value;
-                    RaisePropertyChanged("TimeZone");
-                }
-            }
-        }
-        #endregion
 
         /// <summary>
-        /// Loaders know how to do two things:
-        /// 
-        /// 1. Request new data
-        /// 2. Process the response of that request into an object of the containing type (ZipCodeVm in this case)
+        ///     Loaders know how to do two things:
+        ///     1. Request new data
+        ///     2. Process the response of that request into an object of the containing type (ZipCodeVm in this case)
         /// </summary>
         public class ZipCodeVmDataLoader : IDataLoader<ZipCodeLoadContext>
         {
@@ -118,13 +39,12 @@ namespace NWSWeather.Sample.ViewModels
             public LoadRequest GetLoadRequest(ZipCodeLoadContext loadContext, Type objectType)
             {
                 // build the URI, return a WebLoadRequest.
-                string uri = String.Format(ZipCodeUriFormat, loadContext.ZipCode);
+                var uri = String.Format(ZipCodeUriFormat, loadContext.ZipCode);
                 return new WebLoadRequest(loadContext, new Uri(uri));
             }
 
-            public object Deserialize(ZipCodeLoadContext loadContext, Type objectType, System.IO.Stream stream)
+            public object Deserialize(ZipCodeLoadContext loadContext, Type objectType, Stream stream)
             {
-
                 // the XML will look like hte following, so we parse it.
 
                 //<?xml version="1.0" encoding="utf-8"?>
@@ -142,28 +62,79 @@ namespace NWSWeather.Sample.ViewModels
 
 
                 var table = (
-                            from t in xml.Elements("Table")
-                            select t).FirstOrDefault();
+                    from t in xml.Elements("Table")
+                    select t).FirstOrDefault();
 
-                if (table == null) {
+                if (table == null)
+                {
                     throw new ArgumentException("Unknown zipcode " + loadContext.ZipCode);
                 }
 
-                ZipCodeVm vm = new ZipCodeVm(loadContext.ZipCode);
-                vm.City = table.Element("CITY").Value;
-                vm.State = table.Element("STATE").Value;
-                vm.AreaCode = table.Element("AREA_CODE").Value;
-                vm.TimeZone = table.Element("TIME_ZONE").Value;
+                var vm = new ZipCodeVm(loadContext.ZipCode)
+                {
+                    City = table.Element("CITY").Value,
+                    State = table.Element("STATE").Value,
+                    AreaCode = table.Element("AREA_CODE").Value,
+                    TimeZone = table.Element("TIME_ZONE").Value
+                };
                 return vm;
             }
         }
-        
 
-        
-        
+        private string _city;
+        public string City
+        {
+            get { return _city; }
+            set
+            {
+                if (_city != value)
+                {
+                    _city = value;
+                    RaisePropertyChanged("City");
+                }
+            }
+        }
 
-        
+        private string _state;
+        public string State
+        {
+            get { return _state; }
+            set
+            {
+                if (_state != value)
+                {
+                    _state = value;
+                    RaisePropertyChanged("State");
+                }
+            }
+        }
 
+        private string _areaCode;
+        public string AreaCode
+        {
+            get { return _areaCode; }
+            set
+            {
+                if (_areaCode != value)
+                {
+                    _areaCode = value;
+                    RaisePropertyChanged("AreaCode");
+                }
+            }
+        }
         
+        private string _timeZone;
+        public string TimeZone
+        {
+            get { return _timeZone; }
+            set
+            {
+                if (_timeZone != value)
+                {
+                    _timeZone = value;
+                    RaisePropertyChanged("TimeZone");
+                }
+            }
+        }
     }
 }

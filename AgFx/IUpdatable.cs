@@ -31,13 +31,5 @@ namespace AgFx
         /// </summary>
         /// <param name="source"></param>
         void UpdateFrom(object source);
-
-        /// <summary>
-        /// Initiates a refresh of this object's value.
-        /// For an object of type T, this is the equivelent of calling
-        /// 
-        /// DataManager.Current.Refresh(this.LoadContext)
-        /// </summary>
-        void Refresh();
     }
 }

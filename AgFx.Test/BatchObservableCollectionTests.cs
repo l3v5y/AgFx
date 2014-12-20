@@ -1,173 +1,158 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Microsoft.Silverlight.Testing;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Linq;
 using System.Threading;
+using System.Windows;
+using Xunit;
 
 namespace AgFx.Test
 {
-    [TestClass]
-    public class BatchObservableCollectionTests : WorkItemTest
+    public class BatchObservableCollectionTests
     {
+        private const int ASYNCHRONOUS_TEST_TIMEOUT = 5000;
 
-        [TestMethod]
-        [Asynchronous]
+        [Fact]
+        // Needs to run on the UI thread
         public void TestAddRange()
         {
-            BatchObservableCollection<Foo> foos = new BatchObservableCollection<Foo>(4);
+            var resetEvent = new ManualResetEvent(false);
 
-            int changeCount = -1;
+            Deployment.Current.Dispatcher.BeginInvoke(() =>
+            {
+                var foos = new BatchObservableCollection<Foo>(4);
 
-            NotifyCollectionChangedEventHandler handler = null;
+                var changeCount = -1;
 
-            handler = (s, a) =>
+                NotifyCollectionChangedEventHandler handler = null;
+
+                handler = (s, a) =>
                 {
-                    if (changeCount > 0)
+                    if(changeCount > 0)
                     {
                         foos.CollectionChanged -= handler;
-
-                        TestComplete();
+                        resetEvent.Set();
                     }
                     changeCount++;
                 };
 
-            foos.CollectionChanged += handler;
+                foos.CollectionChanged += handler;
 
-            List<Foo> fooList = new List<Foo>();
+                var fooList = new List<Foo>();
 
-            for (int i = 0; i < 7; i++)
-            {
-                fooList.Add(new Foo(i, i.ToString()));
-            }
-            foos.AddRange(fooList);
+                for(var i = 0; i < 7; i++)
+                {
+                    fooList.Add(new Foo(i, i.ToString()));
+                }
+                foos.AddRange(fooList);
 
-            // just make sure the add isn't synhronous
-            Assert.AreEqual(-1, changeCount);
+                // just make sure the add isn't synhronous
+                Assert.Equal(-1, changeCount);
+            });
+            Assert.True(resetEvent.WaitOne(ASYNCHRONOUS_TEST_TIMEOUT));
         }
 
-        [TestMethod]
+        [Fact]
         public void TestMerge()
         {
-            BatchObservableCollection<Foo> original = new BatchObservableCollection<Foo>(10);
+            var original = new BatchObservableCollection<Foo>(10);
 
             original.Add(new Foo(1, "1"));
             original.Add(new Foo(2, "1"));
             original.Add(new Foo(3, "1"));
             original.Add(new Foo(5, "1"));
             original.Add(new Foo(7, "1"));
-            //original.Add(new Foo(11, "1"));
-            //original.Add(new Foo(13, "1"));
-            //original.Add(new Foo(17, "1"));
 
 
-            BatchObservableCollection<Foo> update = new BatchObservableCollection<Foo>(10);
+            var update = new BatchObservableCollection<Foo>(10);
 
             update.Add(new Foo(1, "_2"));
             update.Add(new Foo(3, "_2"));
             update.Add(new Foo(7, "_2"));
             update.Add(new Foo(9, "2"));
             update.Add(new Foo(10, "2"));
-            //update.Add(new Foo(6, "1"));
-            //update.Add(new Foo(7, "1"));
-            //update.Add(new Foo(12, "1"));
-            //update.Add(new Foo(13, "1"));
-            //update.Add(new Foo(17, "1"));
-            //update.Add(new Foo(23, "1"));
-            //update.Add(new Foo(19, "1"));
-            //update.Add(new Foo(29, "1"));
 
 
-            original.CollectionChanged += (s, a) =>
-            {
-                Assert.AreNotEqual(0, original.Count);
-            };
+            original.CollectionChanged += (s, a) => { Assert.NotEqual(0, original.Count); };
 
-            original.Merge(update, (x, y) => { return x.ID - y.ID; }, EquivelentItemMergeBehavior.ReplaceEqualItems);
+            original.Merge(update, (x, y) => { return x.Id - y.Id; }, EquivelentItemMergeBehavior.ReplaceEqualItems);
 
 
-            Assert.AreEqual(5, original.Count);
+            Assert.Equal(5, original.Count);
 
-            Assert.AreEqual(original[0].ID, 1);
-            Assert.AreEqual(original[0].Value, "_2");
+            Assert.Equal(original[0].Id, 1);
+            Assert.Equal(original[0].Value, "_2");
 
-            Assert.AreEqual(original[1].ID, 3);
-            Assert.AreEqual(original[1].Value, "_2");
+            Assert.Equal(original[1].Id, 3);
+            Assert.Equal(original[1].Value, "_2");
 
-            Assert.AreEqual(original[2].ID, 7);
-            Assert.AreEqual(original[2].Value, "_2");
+            Assert.Equal(original[2].Id, 7);
+            Assert.Equal(original[2].Value, "_2");
 
-            Assert.AreEqual(original[3].ID, 9);
-            Assert.AreEqual(original[3].Value, "2");
+            Assert.Equal(original[3].Id, 9);
+            Assert.Equal(original[3].Value, "2");
 
-            Assert.AreEqual(original[4].ID, 10);
-            Assert.AreEqual(original[4].Value, "2");            
-
+            Assert.Equal(original[4].Id, 10);
+            Assert.Equal(original[4].Value, "2");
         }
 
-        [TestMethod]
+        [Fact]
         public void TestOffThread()
         {
-            ManualResetEvent ev = new ManualResetEvent(false);
+            var ev = new ManualResetEvent(false);
 
-            ThreadPool.QueueUserWorkItem((x) =>
+            ThreadPool.QueueUserWorkItem(x =>
             {
-                BatchObservableCollection<Foo> bc = new BatchObservableCollection<Foo>(2);
+                var batchObservableCollection = new BatchObservableCollection<Foo>(2);
 
-                bc.Add(new Foo());
-                bc.Add(new Foo());
-                bc.Add(new Foo());
+                batchObservableCollection.Add(new Foo());
+                batchObservableCollection.Add(new Foo());
+                batchObservableCollection.Add(new Foo());
 
                 Thread.Sleep(50);
 
-                bc.Add(new Foo());
-                bc.Add(new Foo());
-                bc.Add(new Foo());
-                bc.Add(new Foo());
-
-
+                batchObservableCollection.Add(new Foo());
+                batchObservableCollection.Add(new Foo());
+                batchObservableCollection.Add(new Foo());
+                batchObservableCollection.Add(new Foo());
                 ev.Set();
-
             },
-            null);
+                null);
 
             ev.WaitOne();
         }
 
         public class Foo
         {
-            public int ID { get; set; }
-            public string Value { get; set; }
-
             public Foo()
             {
-
             }
 
             public Foo(int i, string s)
             {
-                ID = i;
+                Id = i;
                 Value = s;
             }
 
+            public int Id { get; set; }
+            public string Value { get; set; }
+
             public override string ToString()
             {
-                return string.Format("ID={0}, Value={1}", ID, Value);
+                return string.Format("ID={0}, Value={1}", Id, Value);
             }
 
             public override bool Equals(object obj)
             {
-                Foo other = obj as Foo;
-                if (other == null)
+                var other = obj as Foo;
+                if(other == null)
                 {
                     return false;
                 }
-                return other.ID == ID;
+                return other.Id == Id;
             }
 
             public override int GetHashCode()
             {
-                return ID.GetHashCode();
+                return Id.GetHashCode();
             }
         }
     }

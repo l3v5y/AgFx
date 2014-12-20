@@ -1,0 +1,35 @@
+diff a/AgFx/DataManager.cs b/AgFx/DataManager.cs	(rejected hunks)
+@@ -523,7 +523,7 @@
+         /// </summary>
+         /// <typeparam name="T"></typeparam>
+         /// <param name="value">The instance to update.</param>
+-        public void RegisterProxy<T>(T value) where T : ILoadContextItem, new()
++        public void RegisterProxy<T>(T value) where T : ModelItemBase
+         {
+             RegisterProxy(value, false, null, true);
+         }
+@@ -544,7 +544,7 @@
+         ///     assuming no value currently exists for the item. Otherwise this is ignored.
+         /// </param>
+         public void RegisterProxy<T>(T value, bool doLoad, Action<T> update, bool canUseAsInitialValue)
+-            where T : ILoadContextItem, new()
++            where T : ModelItemBase
+         {
+             if (value == null || value.LoadContext == null)
+             {
+@@ -757,14 +757,7 @@
+                     return proxy.ProxyReference.Target;
+                 }
+ 
+-                var item = new T();
+-
+-                if (item is ILoadContextItem)
+-                {
+-                    ((ILoadContextItem) item).LoadContext = value.LoadContext;
+-                }
+-
+-                return item;
++                return Activator.CreateInstance(typeof(T), new object[] {value.LoadContext, NotificationContext, this});
+             };
+ 
+             SetupCompletedCallback(completed, error, value);
