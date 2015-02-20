@@ -32,12 +32,6 @@ namespace AgFx
         /// </summary>
         /// <returns>An enumerable of all the items in the store.</returns>
         IEnumerable<CacheItemInfo> GetItems();
-        
-        /// <summary>
-        ///     Delete's the given item from the store.
-        /// </summary>
-        /// <param name="item">The item to delete</param>
-        void Delete(CacheItemInfo item);
 
         /// <summary>
         ///     Delete all of the items with the given unique key.

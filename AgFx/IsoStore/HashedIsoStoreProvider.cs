@@ -103,32 +103,7 @@ namespace AgFx.IsoStore
             var items = GetItems().ToArray();
             foreach(var item in items)
             {
-                Delete(item);
-            }
-        }
-
-        /// <summary>
-        ///     Delete's the given item from the store.
-        /// </summary>
-        /// <param name="item">The item to delete</param>
-        public void Delete(CacheItemInfo item)
-        {
-            lock(_cache)
-            {
-                CacheItemInfo cachedItem;
-                if(_cache.TryGetValue(item.UniqueName, out cachedItem) && Equals(item, cachedItem))
-                {
-                    _cache.Remove(item.UniqueName);
-                }
-            }
-
-            var fi = new FileItem(item, _cacheDirectoryPrefix);
-
-            var fileName = fi.FileName;
-
-            lock(_lockObject)
-            {
-                DeleteFileHelper(_isoStore, fileName);
+                Delete(item.UniqueName);
             }
         }
 
@@ -231,7 +206,10 @@ namespace AgFx.IsoStore
                     files = new string[0];
                 }
 
-                var items = files.Select(x => FileItem.FromFileName(x, _cacheDirectoryPrefix)).Where(cii => cii != null).ToList();
+                var items =
+                    files.Select(x => FileItem.FromFileName(x, _cacheDirectoryPrefix))
+                        .Where(cii => cii != null)
+                        .ToList();
 
                 var orderedItems = from i in items
                     where i.UniqueName == uniqueName
@@ -245,7 +223,7 @@ namespace AgFx.IsoStore
                         item = i;
                         continue;
                     }
-                    Delete(i);
+                    Delete(i.UniqueName);
                 }
 
                 if(item != null)

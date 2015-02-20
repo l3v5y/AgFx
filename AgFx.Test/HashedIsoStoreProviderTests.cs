@@ -80,7 +80,7 @@ namespace AgFx.Test
 
             Assert.NotNull(cacheItemInfo);
 
-            storeProvider.Delete(cii);
+            storeProvider.Delete("KillMe");
 
             Thread.Sleep(100);
 
@@ -114,7 +114,7 @@ namespace AgFx.Test
             Assert.Equal(7, bytes[0]);
 
             // cleanup
-            storeProvider.Delete(cii);
+            storeProvider.Delete(cii.UniqueName);
         }
 
         [Fact]
@@ -143,7 +143,7 @@ namespace AgFx.Test
             Assert.Equal(1, bytes.Length);
             Assert.Equal(7, bytes[0]);
 
-            storeProvider.Delete(cii);
+            storeProvider.Delete(cii.UniqueName);
         }
 
         private static void DeleteDirectoryRecursively(IsolatedStorageFile storageFile, string dirName)

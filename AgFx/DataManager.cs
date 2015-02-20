@@ -115,15 +115,15 @@ namespace AgFx
                     //
                     var itemsToCleanup = from item in _storeProvider.GetItems()
                         where item.ExpirationTime <= maximumExpirationTime
-                        select item;
+                        select item.UniqueName;
 
                     // we snap the enumerable to an array to guard against any provider
                     // implementations that might have returned an enumerator that would be affected
                     // by the delete operation.
                     //
-                    foreach(var item in itemsToCleanup.ToArray())
+                    foreach(var uniqueName in itemsToCleanup.ToArray())
                     {
-                        _storeProvider.Delete(item);
+                        _storeProvider.Delete(uniqueName);
                     }
                 }
                 catch(Exception ex)

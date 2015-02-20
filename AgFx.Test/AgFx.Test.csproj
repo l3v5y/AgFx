@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\sqlite-net-wp8.3.8.5\build\windowsphone8\sqlite-net-wp8.props" Condition="Exists('..\packages\sqlite-net-wp8.3.8.5\build\windowsphone8\sqlite-net-wp8.props')" />
   <Import Project="..\packages\xunit.runner.xamarin.0.99.7-rc1\build\wp8\xunit.runner.xamarin.props" Condition="Exists('..\packages\xunit.runner.xamarin.0.99.7-rc1\build\wp8\xunit.runner.xamarin.props')" />
   <Import Project="..\packages\xunit.core.2.0.0-rc1-build2826\build\wp8\xunit.core.props" Condition="Exists('..\packages\xunit.core.2.0.0-rc1-build2826\build\wp8\xunit.core.props')" />
   <PropertyGroup>
@@ -27,7 +28,7 @@
     <ValidateXaml>true</ValidateXaml>
     <MinimumVisualStudioVersion>11.0</MinimumVisualStudioVersion>
     <ThrowErrorsInValidation>true</ThrowErrorsInValidation>
-    <NuGetPackageImportStamp>6dfd2f8e</NuGetPackageImportStamp>
+    <NuGetPackageImportStamp>3e493377</NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -98,6 +99,7 @@
     </Compile>
     <Compile Include="AutoLoadContextCreatorTests.cs" />
     <Compile Include="BatchObservableCollectionTests.cs" />
+    <Compile Include="SQLiteStoreProviderTests.cs" />
     <Compile Include="TestModels\ShortCacheObject.cs" />
     <Compile Include="DataManagerTests.cs" />
     <Compile Include="InMemoryStoreProvider.cs" />
@@ -181,6 +183,10 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\AgFx.SQLiteStore\AgFx.SQLiteStoreProvider.csproj">
+      <Project>{f7a31bc8-9e6b-4270-8113-f0670e5bc43c}</Project>
+      <Name>AgFx.SQLiteStoreProvider</Name>
+    </ProjectReference>
     <ProjectReference Include="..\AgFx\AgFx.csproj">
       <Project>{3ed37b15-a664-4e31-abd3-cd3522b35e27}</Project>
       <Name>AgFx</Name>
@@ -190,6 +196,15 @@
     <Reference Include="Microsoft.Phone.Controls.Toolkit, Version=8.0.1.0, Culture=neutral, PublicKeyToken=b772ad94eb9ca604, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\packages\WPtoolkit.4.2013.08.16\lib\wp8\Microsoft.Phone.Controls.Toolkit.dll</HintPath>
+    </Reference>
+    <Reference Include="Sqlite">
+      <HintPath>..\packages\sqlite-net-wp8.3.8.5\lib\windowsphone8\Sqlite.winmd</HintPath>
+    </Reference>
+    <Reference Include="SQLite.Net">
+      <HintPath>..\packages\SQLite.Net-PCL.2.5.1\lib\portable-win8+net45+wp8+wpa81+MonoAndroid1+MonoTouch1\SQLite.Net.dll</HintPath>
+    </Reference>
+    <Reference Include="SQLite.Net.Platform.WindowsPhone8">
+      <HintPath>..\packages\SQLite.Net.Platform.WindowsPhone8.2.5.1\lib\windowsphone8\x86\SQLite.Net.Platform.WindowsPhone8.dll</HintPath>
     </Reference>
     <Reference Include="Xamarin.Forms.Core, Version=1.3.1.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -220,6 +235,11 @@
       <HintPath>..\packages\xunit.runner.xamarin.0.99.7-rc1\lib\wp8\xunit.runner.xamarin.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <SDKReference Include="SQLite.WP80, Version=3.8.8.1">
+      <Name>SQLite for Windows Phone</Name>
+    </SDKReference>
+  </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\$(TargetFrameworkIdentifier)\$(TargetFrameworkVersion)\Microsoft.$(TargetFrameworkIdentifier).$(TargetFrameworkVersion).Overrides.targets" />
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\$(TargetFrameworkIdentifier)\$(TargetFrameworkVersion)\Microsoft.$(TargetFrameworkIdentifier).CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
@@ -238,7 +258,10 @@
     <Error Condition="!Exists('..\packages\xunit.core.2.0.0-rc1-build2826\build\wp8\xunit.core.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\xunit.core.2.0.0-rc1-build2826\build\wp8\xunit.core.targets'))" />
     <Error Condition="!Exists('..\packages\Xamarin.Forms.1.3.1.6296\build\portable-win+net45+wp80+MonoAndroid10+MonoTouch10+Xamarin.iOS10\Xamarin.Forms.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Xamarin.Forms.1.3.1.6296\build\portable-win+net45+wp80+MonoAndroid10+MonoTouch10+Xamarin.iOS10\Xamarin.Forms.targets'))" />
     <Error Condition="!Exists('..\packages\xunit.runner.xamarin.0.99.7-rc1\build\wp8\xunit.runner.xamarin.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\xunit.runner.xamarin.0.99.7-rc1\build\wp8\xunit.runner.xamarin.props'))" />
+    <Error Condition="!Exists('..\packages\sqlite-net-wp8.3.8.5\build\windowsphone8\sqlite-net-wp8.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sqlite-net-wp8.3.8.5\build\windowsphone8\sqlite-net-wp8.props'))" />
+    <Error Condition="!Exists('..\packages\sqlite-net-wp8.3.8.5\build\windowsphone8\sqlite-net-wp8.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sqlite-net-wp8.3.8.5\build\windowsphone8\sqlite-net-wp8.targets'))" />
   </Target>
   <Import Project="..\packages\xunit.core.2.0.0-rc1-build2826\build\wp8\xunit.core.targets" Condition="Exists('..\packages\xunit.core.2.0.0-rc1-build2826\build\wp8\xunit.core.targets')" />
   <Import Project="..\packages\Xamarin.Forms.1.3.1.6296\build\portable-win+net45+wp80+MonoAndroid10+MonoTouch10+Xamarin.iOS10\Xamarin.Forms.targets" Condition="Exists('..\packages\Xamarin.Forms.1.3.1.6296\build\portable-win+net45+wp80+MonoAndroid10+MonoTouch10+Xamarin.iOS10\Xamarin.Forms.targets')" />
+  <Import Project="..\packages\sqlite-net-wp8.3.8.5\build\windowsphone8\sqlite-net-wp8.targets" Condition="Exists('..\packages\sqlite-net-wp8.3.8.5\build\windowsphone8\sqlite-net-wp8.targets')" />
 </Project>
